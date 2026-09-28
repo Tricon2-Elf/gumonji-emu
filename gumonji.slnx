@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="gumonji.Common.Tests/gumonji.Common.Tests.csproj" />
+  <Project Path="gumonji.Common/gumonji.Common.csproj" />
+  <Project Path="gumonji.Network/gumonji.Network.csproj" />
+  <Project Path="gumonji.Server/gumonji.Server.csproj" />
+</Solution>

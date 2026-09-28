@@ -1,0 +1,212 @@
+using System.Buffers.Binary;
+using System.Numerics;
+using System.Security.Cryptography;
+using gumonji.Common;
+using gumonji.Common.Accounts;
+using gumonji.Network;
+using gumonji.Network.Crypto;
+using gumonji.Network.Packets.Game;
+using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace gumonji.Common.Tests;
+
+public class ProtocolTests
+{
+    [Fact]
+    public void AesKnownAnswerAndLegacyKey()
+    {
+        var aes = new Aes128Ecb(Convert.FromHexString("000102030405060708090a0b0c0d0e0f"));
+        var plain = Convert.FromHexString("00112233445566778899aabbccddeeff");
+        var encrypted = Convert.FromHexString("69c4e0d86a7b0430d8cdb78070b4c55a");
+        Assert.Equal(encrypted, aes.Encrypt(plain));
+        Assert.Equal(plain, aes.Decrypt(encrypted));
+
+        var shared = LegacyDh.ParseUnsignedHex("abcdef0123456789abcdef012345678912345678");
+        Assert.Equal("12345601234567891234560123456789", Convert.ToHexString(LegacyDh.DeriveAesKey(shared)).ToLowerInvariant());
+        Assert.Equal("0ABC", LegacyDh.BnHex(0xABC));
+    }
+
+    [Fact]
+    public void GameEnvelopeRoundTrip()
+    {
+        var fixture = Convert.FromHexString("677a697008000000080000006c76360000000004000002da");
+        var stream = Convert.FromHexString("00000004000002da");
+        Assert.Equal(fixture, VceCompression.Wrap(stream));
+        Assert.Equal(stream, VceCompression.Unwrap(fixture));
+        Assert.Equal(Convert.FromHexString("000002da"), Assert.Single(new InnerFrames().Feed(stream)));
+
+        var page = Frame(PacketType.PageDataResponse, new PageDataResponse(2, 2).ToBytes());
+        var framed = Field(page);
+        var frames = new InnerFrames();
+        var reassembled = new List<byte[]>();
+        for (var pos = 0; pos < framed.Length; pos += VceLimits.MaxRecordData)
+        {
+            var chunk = framed.AsSpan(pos, Math.Min(VceLimits.MaxRecordData, framed.Length - pos));
+            reassembled.AddRange(frames.Feed(VceCompression.Unwrap(VceCompression.Wrap(chunk))));
+        }
+        Assert.Equal(page, Assert.Single(reassembled));
+    }
+
+    [Fact]
+    public async Task AuthHandoffCharacterAndZoneMatchPython()
+    {
+        var accounts = new LocalAccounts();
+        var options = new EmuOptions { GamePort = 50000, AdvertiseIp = "127.0.0.1" };
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var sent = new List<byte[]>();
+        var front = Session(ServerKind.Femsg, accounts, options, sent);
+        var auth = Assert.Single(await Receive(dispatcher, front, sent, "0065047573657206736563726574"));
+        Assert.Equal("00660000000000000001", Convert.ToHexString(auth[..10]).ToLowerInvariant());
+        var reader = new PacketReader(auth.AsSpan(10));
+        Assert.Equal("Local Player"u8.ToArray(), reader.ReadCompactBytes());
+        reader.ReadUInt32();
+        reader.ReadUInt32();
+        reader.ReadUInt32();
+        Assert.Equal(100, reader.ReadCompactBytes().Length);
+        Assert.Equal(1u, reader.ReadUInt32());
+        Assert.Equal(0, reader.Remaining);
+
+        var handoff = Assert.Single(await Receive(dispatcher, front, sent, "006901310100007f"));
+        Assert.Equal("006a00000000", Convert.ToHexString(handoff[..6]).ToLowerInvariant());
+        reader = new PacketReader(handoff.AsSpan(6));
+        var token = reader.ReadCompactBytes();
+        Assert.Equal(0, token[^1]);
+        Assert.Equal("0100007fc350", Convert.ToHexString(handoff.AsSpan(handoff.Length - reader.Remaining)).ToLowerInvariant());
+
+        var check = new PacketWriter();
+        check.Write((uint)PacketType.CheckPasswordRequest);
+        check.Write(1u);
+        check.WriteCompactBytes(token[..^1]);
+        var game = Session(ServerKind.Game, accounts, options, sent);
+        var accepted = Assert.Single(await Receive(dispatcher, game, sent, Convert.ToHexString(check.ToBytes())));
+        Assert.Equal("000000dc0000000000010080008000000001", Convert.ToHexString(accepted).ToLowerInvariant());
+
+        var menu = Assert.Single(await Receive(dispatcher, game, sent, "000002da"));
+        Assert.Equal("000002db0000000000", Convert.ToHexString(menu).ToLowerInvariant());
+        Assert.Equal(SessionState.CharacterCreationMenu, game.State);
+
+        var ui = Assert.Single(await Receive(dispatcher, game, sent, "00002199"));
+        Assert.Equal("0000219a", Convert.ToHexString(ui).ToLowerInvariant());
+        var clock = Assert.Single(await Receive(dispatcher, game, sent, "00002328"));
+        Assert.Equal("000023290000000000000c0001", Convert.ToHexString(clock).ToLowerInvariant());
+
+        var created = Convert.FromHexString("000002e4000000000000000a00000004000000500c");
+        var name = "Local Player"u8.ToArray();
+        var createPacket = new byte[created.Length + name.Length];
+        created.CopyTo(createPacket, 0);
+        name.CopyTo(createPacket, created.Length);
+        var createReplies = await Receive(dispatcher, game, sent, Convert.ToHexString(createPacket));
+        Assert.Equal("000002e500000000", Convert.ToHexString(createReplies[0]).ToLowerInvariant());
+        Assert.Equal("000002d00000000000000001", Convert.ToHexString(createReplies[1]).ToLowerInvariant());
+        Assert.Equal(SessionState.CharacterCreated, game.State);
+
+        var boot = Assert.Single(await Receive(dispatcher, game, sent, "0000183a"));
+        Assert.Equal("0000183b000000000000000000", Convert.ToHexString(boot).ToLowerInvariant());
+        Assert.Empty(await Receive(dispatcher, game, sent, "000003b6"));
+        Assert.False(game.SilentNoReply);
+        var table = Assert.Single(await Receive(dispatcher, game, sent, "00002456"));
+        Assert.Equal("000024570100010001000100", Convert.ToHexString(table).ToLowerInvariant());
+        var names = Assert.Single(await Receive(dispatcher, game, sent, "000032ca"));
+        Assert.Equal("000032cb00", Convert.ToHexString(names).ToLowerInvariant());
+        var field = Assert.Single(await Receive(dispatcher, game, sent, "00003e8c00000000"));
+        Assert.Equal("00003e8d00000000", Convert.ToHexString(field).ToLowerInvariant());
+
+        var entered = await Receive(dispatcher, game, sent, "00000712012f0000000000");
+        Assert.Equal("0000071c0000000000400040000131", Convert.ToHexString(entered[0]).ToLowerInvariant());
+        Assert.Equal(
+            "000005280000000100000000000001060000fa000000fa00000000000000000000000000000000000000000000000000000000000000",
+            Convert.ToHexString(entered[1]).ToLowerInvariant());
+        Assert.Equal(1, entered[1][14]);
+        Assert.Equal((64000u, 64000u), (
+            BinaryPrimitives.ReadUInt32BigEndian(entered[1].AsSpan(16)),
+            BinaryPrimitives.ReadUInt32BigEndian(entered[1].AsSpan(20))));
+        var avatar = Convert.FromHexString(
+            "000005f0000000000000000101000a040c4c6f63616c20506c61796572"
+            + "0000000000000000000000000000005000000000000000000000000000");
+        Assert.Equal(avatar, entered[2]);
+        Assert.Equal(SessionState.ZoneEntered, game.State);
+
+        Assert.Empty(await Receive(dispatcher, game, sent, "0000203a0000000300000001"));
+        Assert.True(game.SilentNoReply);
+
+        var page = await Receive(dispatcher, game, sent, "000001ea0000000200000002");
+        Assert.Equal(23603, page[0].Length);
+        Assert.Equal(
+            "337a0f2067bd855c9c772cdef1d6b6a1f84a3d713be054e92c63b9c7a254fc75",
+            Convert.ToHexString(SHA256.HashData(page[0])).ToLowerInvariant());
+        Assert.Equal("000001f4000000020000000200000000", Convert.ToHexString(page[0][..16]).ToLowerInvariant());
+        Assert.True(page.Count - 1 >= 8);
+        Assert.Equal(
+            "00001fa5000003e80301080000008ca000008ca00000000100000000040000460045000000000000",
+            Convert.ToHexString(page[1]).ToLowerInvariant());
+        var again = await Receive(dispatcher, game, sent, "000001ea0000000200000002");
+        Assert.Single(again);
+
+        Assert.Empty(await Receive(dispatcher, game, sent, "0000052b0000fa000000fa00"));
+        Assert.True(game.SilentNoReply);
+        Assert.Empty(await Receive(dispatcher, game, sent, "0000051e0000000100ffffffff0102000107b40000fa0000000468200000000000000000"));
+        Assert.True(game.SilentNoReply);
+
+        var notice = Session(ServerKind.Femsg, accounts, options, sent);
+        notice.UserId = 1;
+        notice.State = SessionState.HandoffIssued;
+        Assert.Empty(await Receive(dispatcher, notice, sent, "0198"));
+        Assert.True(notice.SilentNoReply);
+        Assert.Empty(await Receive(dispatcher, notice, sent, "01a500000002"));
+        Assert.True(notice.SilentNoReply);
+
+        var character = accounts.Characters[1];
+        Assert.Equal("Local Player"u8.ToArray(), character.Name);
+        Assert.Equal((0, 10, 4, 0x50), (character.Body, character.Model, character.Style, character.Color));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => Receive(dispatcher, game, sent, "0000232800"));
+        var replay = Session(ServerKind.Game, accounts, options, sent);
+        await Assert.ThrowsAsync<InvalidDataException>(() => Receive(dispatcher, replay, sent, Convert.ToHexString(check.ToBytes())));
+    }
+
+    private static GumonjiSession Session(ServerKind kind, LocalAccounts accounts, EmuOptions options, List<byte[]> sent) =>
+        new(kind, accounts, options, (type, body, _) =>
+        {
+            sent.Add(Frame(type, body));
+            return Task.CompletedTask;
+        });
+
+    private static async Task<List<byte[]>> Receive(PacketDispatcher dispatcher, GumonjiSession session, List<byte[]> sent, string hex)
+    {
+        var packet = Convert.FromHexString(hex);
+        var width = session.Kind == ServerKind.Game ? 4 : 2;
+        var opcode = width == 2
+            ? BinaryPrimitives.ReadUInt16BigEndian(packet)
+            : BinaryPrimitives.ReadUInt32BigEndian(packet);
+        var before = sent.Count;
+        session.SilentNoReply = false;
+        await dispatcher.DispatchAsync(session.Kind, (PacketType)opcode, packet.AsMemory(width), session);
+        return sent.Skip(before).ToList();
+    }
+
+    private static byte[] Frame(PacketType type, byte[] body)
+    {
+        var width = (uint)type <= 0xFFFF && PacketTypeInfo.OpcodeWidth(ServerKind.Femsg) == 2 && IsFemsg(type) ? 2 : 4;
+        var packet = new byte[width + body.Length];
+        if (width == 2)
+            BinaryPrimitives.WriteUInt16BigEndian(packet, (ushort)type);
+        else
+            BinaryPrimitives.WriteUInt32BigEndian(packet, (uint)type);
+        body.CopyTo(packet, width);
+        return packet;
+    }
+
+    private static bool IsFemsg(PacketType type) => type is
+        PacketType.HeartbeatRequest or PacketType.HeartbeatReply or PacketType.LoginRequest or PacketType.LoginAcceptResponse
+        or PacketType.ZoneConnectRequest or PacketType.ZoneHandoffResponse or PacketType.HomeZoneRequest or PacketType.HomeZoneReply
+        or PacketType.ZoneEnteredNotice or PacketType.PlayerStateNotice;
+
+    private static byte[] Field(byte[] payload)
+    {
+        var framed = new byte[4 + payload.Length];
+        BinaryPrimitives.WriteInt32BigEndian(framed, payload.Length);
+        payload.CopyTo(framed, 4);
+        return framed;
+    }
+}
