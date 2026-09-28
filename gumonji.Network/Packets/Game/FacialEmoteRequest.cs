@@ -5,6 +5,13 @@ public sealed class FacialEmoteRequest(uint emotionId) : IIncomingPacket<FacialE
 {
     public uint EmotionId { get; } = emotionId;
 
+    public byte[] ToBytes()
+    {
+        var writer = new PacketWriter();
+        writer.Write(EmotionId);
+        return writer.ToBytes();
+    }
+
     public static FacialEmoteRequest FromBytes(ReadOnlySpan<byte> data)
     {
         var reader = new PacketReader(data);

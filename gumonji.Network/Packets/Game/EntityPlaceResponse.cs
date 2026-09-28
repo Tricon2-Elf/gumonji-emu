@@ -23,7 +23,10 @@ public sealed class EntityPlaceResponse(uint entityId, ushort x = 64, ushort y =
         writer.Write(0u);
         writer.Write(0u);
         writer.Write((byte)0);
-        writer.Write((byte)0);
+        // Player actors must be registered in the normal world-entity table.
+        // Chat and emote events resolve their target from this table (0x20),
+        // rather than the generic placement table selected by zero.
+        writer.Write((byte)0x20);
         writer.Write(0u);
         writer.Write(0u);
         return writer.ToBytes();

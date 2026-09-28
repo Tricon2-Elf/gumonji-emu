@@ -53,6 +53,7 @@ public sealed class GumonjiSession
     public Accounts.LocalAccounts Accounts { get; }
     public EmuOptions Options { get; }
     public uint? UserId { get; set; }
+    public uint? CharacterId { get; set; }
     public string State { get; set; }
     public bool SilentNoReply { get; set; }
     public int SentCount { get; private set; }
@@ -64,8 +65,13 @@ public sealed class GumonjiSession
 
     public async Task SendAsync(IOutgoingPacket packet, CancellationToken ct = default)
     {
+        await SendAsync(packet.Type, packet.ToBytes(), ct);
+    }
+
+    public async Task SendAsync(PacketType type, byte[] body, CancellationToken ct = default)
+    {
         SentCount++;
-        await _send(packet.Type, packet.ToBytes(), ct);
+        await _send(type, body, ct);
     }
 
     public (byte Day, byte Hour, byte Minute) GameClock()

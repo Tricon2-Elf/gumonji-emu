@@ -22,8 +22,11 @@ public sealed class CharacterCreateHandler : PacketHandlerBase<CharacterCreateRe
                 Color = (int)request.Color,
             },
             ct);
+        var character = await session.Accounts.GetCharacterAsync(session.UserId.Value, ct)
+            ?? throw new InvalidDataException("CHARACTER_CREATE was not persisted");
+        session.CharacterId = checked((uint)character.Id);
         session.State = SessionState.CharacterCreated;
         await session.SendAsync(new CharacterCreateAcceptResponse(), ct);
-        await session.SendAsync(new CharacterAssignResponse(session.UserId.Value), ct);
+        await session.SendAsync(new CharacterAssignResponse(session.CharacterId.Value), ct);
     }
 }

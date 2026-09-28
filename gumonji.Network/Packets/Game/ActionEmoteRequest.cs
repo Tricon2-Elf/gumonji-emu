@@ -7,6 +7,14 @@ public sealed class ActionEmoteRequest(uint actionId, byte sequence)
     public uint ActionId { get; } = actionId;
     public byte Sequence { get; } = sequence;
 
+    public byte[] ToBytes()
+    {
+        var writer = new PacketWriter();
+        writer.Write(ActionId);
+        writer.Write(Sequence);
+        return writer.ToBytes();
+    }
+
     public static ActionEmoteRequest FromBytes(ReadOnlySpan<byte> data)
     {
         var reader = new PacketReader(data);

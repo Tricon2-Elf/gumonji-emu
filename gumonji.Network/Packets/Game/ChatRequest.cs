@@ -6,6 +6,14 @@ public sealed class ChatRequest(byte[] sender, byte[] message) : IIncomingPacket
     public byte[] Sender { get; } = sender;
     public byte[] Message { get; } = message;
 
+    public byte[] ToBytes()
+    {
+        var writer = new PacketWriter();
+        writer.WriteCompactBytes(Sender);
+        writer.WriteCompactBytes(Message);
+        return writer.ToBytes();
+    }
+
     public static ChatRequest FromBytes(ReadOnlySpan<byte> data)
     {
         var reader = new PacketReader(data);

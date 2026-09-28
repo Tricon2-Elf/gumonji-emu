@@ -13,11 +13,15 @@ public sealed class ZoneEnterHandler : PacketHandlerBase<ZoneEnterRequest>
         var userId = session.UserId!.Value;
         var character = await session.Accounts.GetCharacterAsync(userId, ct)
             ?? new DAL.Entities.Character { Name = "Local Player"u8.ToArray() };
+        var characterId = session.CharacterId ?? checked((uint)character.Id);
+        if (characterId == 0)
+            throw new InvalidDataException("ZONE_ENTER before character assignment");
+        session.CharacterId = characterId;
         session.State = SessionState.ZoneEntered;
         await session.SendAsync(new ZoneEnterResponse(64, 64), ct);
-        await session.SendAsync(new EntityPlaceResponse(userId, 64, 64), ct);
+        await session.SendAsync(new EntityPlaceResponse(characterId, 64, 64), ct);
         await session.SendAsync(
-            new CharacterAvatarResponse(userId, character.Name, character.Body, character.Model, character.Style, character.Color),
+            new CharacterAvatarResponse(characterId, character.Name, character.Body, character.Model, character.Style, character.Color),
             ct);
     }
 }

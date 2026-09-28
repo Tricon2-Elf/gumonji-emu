@@ -68,6 +68,9 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "PLAYER_STATE")]
     PlayerStateNotice = 0x01A5,
 
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "PROFILE_REQUEST")]
+    ProfileRequest = 0x08FD,
+
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "PING")]
     PingRequest = 0x0001,
 
@@ -86,7 +89,7 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "PAGE_DATA")]
     PageDataResponse = 0x01F4,
 
-    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHARACTER_LOAD", ImplementationState.NotImplemented)]
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHARACTER_LOAD")]
     CharacterLoadRequest = 0x02C6,
 
     [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "CHARACTER_ASSIGN")]
@@ -106,6 +109,9 @@ public enum PacketType : uint
 
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "ZONE_ANNOUNCE")]
     ZoneAnnounceRequest = 0x03B6,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "CHAT_EVENT")]
+    ChatEventResponse = 0x0460,
 
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "MOVEMENT")]
     MovementRequest = 0x051E,

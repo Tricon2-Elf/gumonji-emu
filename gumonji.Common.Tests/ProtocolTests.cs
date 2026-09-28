@@ -100,6 +100,7 @@ public class ProtocolTests
         Assert.Equal("000002e500000000", Convert.ToHexString(createReplies[0]).ToLowerInvariant());
         Assert.Equal("000002d00000000000000001", Convert.ToHexString(createReplies[1]).ToLowerInvariant());
         Assert.Equal(SessionState.CharacterCreated, game.State);
+        Assert.Equal(1u, game.CharacterId);
 
         var boot = Assert.Single(await Receive(dispatcher, game, sent, "0000183a"));
         Assert.Equal("0000183b000000000000000000", Convert.ToHexString(boot).ToLowerInvariant());
@@ -115,7 +116,7 @@ public class ProtocolTests
         var entered = await Receive(dispatcher, game, sent, "00000712012f0000000000");
         Assert.Equal("0000071c0000000000400040000131", Convert.ToHexString(entered[0]).ToLowerInvariant());
         Assert.Equal(
-            "000005280000000100000000000001060000fa000000fa00000000000000000000000000000000000000000000000000000000000000",
+            "000005280000000100000000000001060000fa000000fa00000000000000000000000000000000000000000000200000000000000000",
             Convert.ToHexString(entered[1]).ToLowerInvariant());
         Assert.Equal(1, entered[1][14]);
         Assert.Equal((64000u, 64000u), (
@@ -156,8 +157,14 @@ public class ProtocolTests
         Assert.True(game.SilentNoReply);
         Assert.Equal(0x12u, game.LastFacialEmoteId);
 
-        Assert.Empty(await Receive(dispatcher, game, sent, "0000045604686f67650568656c6c6f"));
-        Assert.True(game.SilentNoReply);
+        var chat = Assert.Single(await Receive(dispatcher, game, sent, "0000045604686f67650568656c6c6f"));
+        Assert.Equal((uint)PacketType.ChatEventResponse, BinaryPrimitives.ReadUInt32BigEndian(chat));
+        Assert.Equal(
+            Frame(PacketType.ChatEventResponse, new ChatEventResponse(1, "Local Player"u8.ToArray(), "hello"u8.ToArray()).ToBytes()),
+            chat);
+        Assert.Equal(
+            "0000046000000000000000010000000000000c4c6f63616c20506c61796572000568656c6c6f",
+            Convert.ToHexString(chat).ToLowerInvariant());
         Assert.Equal("hoge"u8.ToArray(), game.LastChat!.Sender);
         Assert.Equal("hello"u8.ToArray(), game.LastChat.Message);
 
@@ -177,6 +184,20 @@ public class ProtocolTests
         Assert.NotNull(character);
         Assert.Equal("Local Player"u8.ToArray(), character!.Name);
         Assert.Equal((0, 10, 4, 0x50), (character.Body, character.Model, character.Style, character.Color));
+
+        var profile = Session(ServerKind.Femsg, accounts, options, sent);
+        profile.UserId = 1;
+        profile.State = SessionState.WaitZoneRequest;
+        Assert.Empty(await Receive(dispatcher, profile, sent, "08fd00000001"));
+        Assert.True(profile.SilentNoReply);
+
+        var returning = Session(ServerKind.Game, accounts, options, sent);
+        returning.UserId = 1;
+        returning.State = SessionState.WaitCharacterCheck;
+        var assigned = Assert.Single(await Receive(dispatcher, returning, sent, "000002c6"));
+        Assert.Equal("000002d00000000000000001", Convert.ToHexString(assigned).ToLowerInvariant());
+        Assert.Equal(SessionState.CharacterCreated, returning.State);
+        Assert.Equal(1u, returning.CharacterId);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => Receive(dispatcher, game, sent, "0000232800"));
         var replay = Session(ServerKind.Game, accounts, options, sent);
@@ -218,7 +239,7 @@ public class ProtocolTests
     private static bool IsFemsg(PacketType type) => type is
         PacketType.HeartbeatRequest or PacketType.HeartbeatReply or PacketType.LoginRequest or PacketType.LoginAcceptResponse
         or PacketType.ZoneConnectRequest or PacketType.ZoneHandoffResponse or PacketType.HomeZoneRequest or PacketType.HomeZoneReply
-        or PacketType.ZoneEnteredNotice or PacketType.PlayerStateNotice;
+        or PacketType.ZoneEnteredNotice or PacketType.PlayerStateNotice or PacketType.ProfileRequest;
 
     private static byte[] Field(byte[] payload)
     {
