@@ -27,6 +27,10 @@ public static class SessionState
     public const string ZoneEntered = "ZONE_ENTERED";
 }
 
+public sealed record ActionEmoteState(uint ActionId, byte Sequence);
+
+public sealed record ChatState(byte[] Sender, byte[] Message);
+
 public sealed class GumonjiSession
 {
     private readonly Func<PacketType, byte[], CancellationToken, Task> _send;
@@ -53,6 +57,10 @@ public sealed class GumonjiSession
     public bool SilentNoReply { get; set; }
     public int SentCount { get; private set; }
     public HashSet<(uint X, uint Y)> PlantedChunks { get; } = [];
+    public ActionEmoteState? LastActionEmote { get; set; }
+    public uint? LastFacialEmoteId { get; set; }
+    public ChatState? LastChat { get; set; }
+    public bool IsTypingInChat { get; set; }
 
     public async Task SendAsync(IOutgoingPacket packet, CancellationToken ct = default)
     {

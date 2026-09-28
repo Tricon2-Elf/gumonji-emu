@@ -148,6 +148,23 @@ public class ProtocolTests
         Assert.Empty(await Receive(dispatcher, game, sent, "0000051e0000000100ffffffff0102000107b40000fa0000000468200000000000000000"));
         Assert.True(game.SilentNoReply);
 
+        Assert.Empty(await Receive(dispatcher, game, sent, "000006220000001302"));
+        Assert.True(game.SilentNoReply);
+        Assert.Equal(new ActionEmoteState(0x13, 2), game.LastActionEmote);
+
+        Assert.Empty(await Receive(dispatcher, game, sent, "0000063000000012"));
+        Assert.True(game.SilentNoReply);
+        Assert.Equal(0x12u, game.LastFacialEmoteId);
+
+        Assert.Empty(await Receive(dispatcher, game, sent, "0000045604686f67650568656c6c6f"));
+        Assert.True(game.SilentNoReply);
+        Assert.Equal("hoge"u8.ToArray(), game.LastChat!.Sender);
+        Assert.Equal("hello"u8.ToArray(), game.LastChat.Message);
+
+        Assert.Empty(await Receive(dispatcher, game, sent, "0000046a"));
+        Assert.True(game.SilentNoReply);
+        Assert.True(game.IsTypingInChat);
+
         var notice = Session(ServerKind.Femsg, accounts, options, sent);
         notice.UserId = 1;
         notice.State = SessionState.HandoffIssued;

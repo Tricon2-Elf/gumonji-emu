@@ -116,6 +116,18 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "POSITION_REPORT")]
     PositionReportRequest = 0x052B,
 
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHAT")]
+    ChatRequest = 0x0456,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHAT_TYPING")]
+    ChatTypingRequest = 0x046A,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "ACTION_EMOTE")]
+    ActionEmoteRequest = 0x0622,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "FACIAL_EMOTE")]
+    FacialEmoteRequest = 0x0630,
+
     [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "CHARACTER_AVATAR")]
     CharacterAvatarResponse = 0x05F0,
 
