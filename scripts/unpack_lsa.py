@@ -15,10 +15,171 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gumonji_vce_poc import AES128, INV_SBOX, RCON, SBOX
 
 ARCHIVE_KEY = 0xA8965F75
 ENTRY_SIZE = 1076
+BLOCK = 16
+
+# Legacy VCE 1.x DH group embedded at gumonji.exe.c aF488fd584e49db.
+DH_P_HEX = (
+    "f488fd584e49dbcd20b49de49107366b336c380d451d0f7c88b31c7c5b2d8ef6"
+    "f3c923c043f0a55b188d8ebb558cb85d38d334fd7c175743a31d186cde33212cb"
+    "52aff3ce1b1294018118d7c84a70a72d686c40319c807297aca950cd9969fabd"
+    "00a509b0246d3083d66a45d419f9c7cbd894b221926baaba25ec355e92f78c7"
+)
+DH_P = int(DH_P_HEX, 16)
+
+
+def _gf_mul(a: int, b: int) -> int:
+    r = 0
+    for _ in range(8):
+        if b & 1:
+            r ^= a
+        a = ((a << 1) ^ 0x11B) if a & 0x80 else (a << 1)
+        b >>= 1
+    return r & 0xFF
+
+
+def _gf_pow(a: int, n: int) -> int:
+    r = 1
+    while n:
+        if n & 1:
+            r = _gf_mul(r, a)
+        a = _gf_mul(a, a)
+        n >>= 1
+    return r
+
+
+def _rotl8(x: int, n: int) -> int:
+    return ((x << n) | (x >> (8 - n))) & 0xFF
+
+
+def _make_sbox() -> tuple[list[int], list[int]]:
+    s, inv = [], [0] * 256
+    for x in range(256):
+        y = 0 if x == 0 else _gf_pow(x, 254)
+        z = y ^ _rotl8(y, 1) ^ _rotl8(y, 2) ^ _rotl8(y, 3) ^ _rotl8(y, 4) ^ 0x63
+        s.append(z)
+        inv[z] = x
+    return s, inv
+
+
+SBOX, INV_SBOX = _make_sbox()
+RCON = [0, 1]
+for _ in range(1, 10):
+    RCON.append(_gf_mul(RCON[-1], 2))
+
+
+class AES128:
+    """Minimal AES-128 ECB implementation, matching Rijndael's 16-byte block."""
+
+    def __init__(self, key: bytes):
+        if len(key) != 16:
+            raise ValueError("AES-128 requires a 16-byte key")
+        words = [list(key[i:i + 4]) for i in range(0, 16, 4)]
+        for i in range(4, 44):
+            t = words[i - 1][:]
+            if i % 4 == 0:
+                t = t[1:] + t[:1]
+                t = [SBOX[x] for x in t]
+                t[0] ^= RCON[i // 4]
+            words.append([words[i - 4][j] ^ t[j] for j in range(4)])
+        self.round_keys = [sum(words[4*r:4*r+4], []) for r in range(11)]
+
+    @staticmethod
+    def _add_key(s: list[int], k: list[int]) -> None:
+        for i in range(16):
+            s[i] ^= k[i]
+
+    @staticmethod
+    def _shift_rows(s: list[int]) -> list[int]:
+        # State is stored column-major: index = 4*column + row.
+        return [s[0], s[5], s[10], s[15],
+                s[4], s[9], s[14], s[3],
+                s[8], s[13], s[2], s[7],
+                s[12], s[1], s[6], s[11]]
+
+    @staticmethod
+    def _inv_shift_rows(s: list[int]) -> list[int]:
+        return [s[0], s[13], s[10], s[7],
+                s[4], s[1], s[14], s[11],
+                s[8], s[5], s[2], s[15],
+                s[12], s[9], s[6], s[3]]
+
+    @staticmethod
+    def _mix_columns(s: list[int], inverse: bool = False) -> list[int]:
+        out = s[:]
+        for c in range(4):
+            i = 4 * c
+            a = s[i:i+4]
+            if not inverse:
+                out[i:i+4] = [
+                    _gf_mul(a[0], 2) ^ _gf_mul(a[1], 3) ^ a[2] ^ a[3],
+                    a[0] ^ _gf_mul(a[1], 2) ^ _gf_mul(a[2], 3) ^ a[3],
+                    a[0] ^ a[1] ^ _gf_mul(a[2], 2) ^ _gf_mul(a[3], 3),
+                    _gf_mul(a[0], 3) ^ a[1] ^ a[2] ^ _gf_mul(a[3], 2)]
+            else:
+                out[i:i+4] = [
+                    _gf_mul(a[0], 14) ^ _gf_mul(a[1], 11) ^ _gf_mul(a[2], 13) ^ _gf_mul(a[3], 9),
+                    _gf_mul(a[0], 9) ^ _gf_mul(a[1], 14) ^ _gf_mul(a[2], 11) ^ _gf_mul(a[3], 13),
+                    _gf_mul(a[0], 13) ^ _gf_mul(a[1], 9) ^ _gf_mul(a[2], 14) ^ _gf_mul(a[3], 11),
+                    _gf_mul(a[0], 11) ^ _gf_mul(a[1], 13) ^ _gf_mul(a[2], 9) ^ _gf_mul(a[3], 14)]
+        return out
+
+    def decrypt_block(self, block: bytes) -> bytes:
+        s = list(block)
+        self._add_key(s, self.round_keys[10])
+        for r in range(9, 0, -1):
+            s = self._inv_shift_rows(s)
+            s = [INV_SBOX[x] for x in s]
+            self._add_key(s, self.round_keys[r])
+            s = self._mix_columns(s, inverse=True)
+        s = self._inv_shift_rows(s)
+        s = [INV_SBOX[x] for x in s]
+        self._add_key(s, self.round_keys[0])
+        return bytes(s)
+
+    def encrypt_block(self, block: bytes) -> bytes:
+        if len(block) != BLOCK:
+            raise ValueError("AES block must be 16 bytes")
+        s = list(block)
+        self._add_key(s, self.round_keys[0])
+        for r in range(1, 10):
+            s = [SBOX[x] for x in s]
+            s = self._shift_rows(s)
+            s = self._mix_columns(s)
+            self._add_key(s, self.round_keys[r])
+        s = [SBOX[x] for x in s]
+        s = self._shift_rows(s)
+        self._add_key(s, self.round_keys[10])
+        return bytes(s)
+
+    def decrypt_ecb(self, data: bytes) -> bytes:
+        if len(data) % BLOCK:
+            raise ValueError("ciphertext is not block aligned")
+        return b"".join(self.decrypt_block(data[i:i+BLOCK]) for i in range(0, len(data), BLOCK))
+
+    def encrypt_ecb(self, data: bytes) -> bytes:
+        if len(data) % BLOCK:
+            raise ValueError("plaintext is not block aligned")
+        return b"".join(self.encrypt_block(data[i:i+BLOCK]) for i in range(0, len(data), BLOCK))
+
+
+def bn_hex(value: int) -> bytes:
+    """sub_5CE100 emits big-endian whole-byte hex without leading zero bytes."""
+    return value.to_bytes(max(1, (value.bit_length() + 7) // 8), "big").hex().upper().encode("ascii")
+
+
+def derive_aes_key(shared: int) -> bytes:
+    # sub_5A8510 -> sub_5AD0C0 takes the FIRST 16 bytes of BN_bn2hex(shared).
+    raw = bytes.fromhex(bn_hex(shared).decode())[:16]
+    if len(raw) != 16:
+        raise ValueError("DH shared secret is too short")
+    # sub_5C76B0 uses lowercase %02x; sub_5C7640 then maps each ASCII
+    # character modulo 16 (!): 'a'..'f' become 1..6 rather than 10..15.
+    digits = raw.hex().encode("ascii")
+    return bytes(((digits[i] & 15) << 4) | (digits[i + 1] & 15)
+                 for i in range(0, 32, 2))
 
 
 class AES256:
