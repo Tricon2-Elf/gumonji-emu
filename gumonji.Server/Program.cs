@@ -1,6 +1,9 @@
 using System.Net;
 using gumonji.Common;
 using gumonji.Common.Accounts;
+using gumonji.Common.DAL;
+using gumonji.Common.DAL.Repositories;
+using Microsoft.EntityFrameworkCore;
 using gumonji.Network;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -26,6 +29,11 @@ public static class Program
         });
         builder.Logging.SetMinimumLevel(options.Verbose ? LogLevel.Debug : LogLevel.Information);
         builder.Services.AddSingleton(options);
+        builder.Services.AddDbContextFactory<MainContext>(db =>
+            db.UseSqlite($"Data Source={Path.GetFullPath(options.DatabasePath)}"));
+        builder.Services.AddSingleton<IAccountRepository, AccountRepository>();
+        builder.Services.AddSingleton<ICharacterRepository, CharacterRepository>();
+        builder.Services.AddSingleton<ILoginTokenRepository, LoginTokenRepository>();
         builder.Services.AddSingleton<LocalAccounts>();
         builder.Services.AddSingleton(sp => PacketDispatcher.CreateDefault(sp.GetRequiredService<ILogger<PacketDispatcher>>()));
         builder.Services.AddHostedService<GumonjiHost>();
@@ -43,14 +51,18 @@ public sealed class GumonjiHost(
     EmuOptions options,
     LocalAccounts accounts,
     PacketDispatcher dispatcher,
+    IDbContextFactory<MainContext> dbFactory,
     ILogger<GumonjiHost> logger) : BackgroundService
 {
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await using (var db = await dbFactory.CreateDbContextAsync(stoppingToken))
+            await db.Database.MigrateAsync(stoppingToken);
+
         var bind = IPAddress.Parse(options.BindAddress);
         var femsg = new VceListener(logger, "frontend", ServerKind.Femsg, new IPEndPoint(bind, options.FemsgPort), Attach, OnPacket);
         var game = new VceListener(logger, "game", ServerKind.Game, new IPEndPoint(bind, options.GamePort), Attach, OnPacket);
-        return Task.WhenAll(femsg.RunAsync(stoppingToken), game.RunAsync(stoppingToken));
+        await Task.WhenAll(femsg.RunAsync(stoppingToken), game.RunAsync(stoppingToken));
     }
 
     private object Attach(ClientConnection connection) =>

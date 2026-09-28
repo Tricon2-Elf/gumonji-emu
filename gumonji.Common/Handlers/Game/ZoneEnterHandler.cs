@@ -11,8 +11,8 @@ public sealed class ZoneEnterHandler : PacketHandlerBase<ZoneEnterRequest>
     {
         session.EnsureZonePacket(RequestType);
         var userId = session.UserId!.Value;
-        if (!session.Accounts.Characters.TryGetValue(userId, out var character))
-            character = new Character("Local Player"u8.ToArray(), 0, 0, 0, 0);
+        var character = await session.Accounts.GetCharacterAsync(userId, ct)
+            ?? new DAL.Entities.Character { Name = "Local Player"u8.ToArray() };
         session.State = SessionState.ZoneEntered;
         await session.SendAsync(new ZoneEnterResponse(64, 64), ct);
         await session.SendAsync(new EntityPlaceResponse(userId, 64, 64), ct);

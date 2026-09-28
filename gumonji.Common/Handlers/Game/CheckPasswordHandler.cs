@@ -5,14 +5,14 @@ public sealed class CheckPasswordHandler : PacketHandlerBase<CheckPasswordReques
     public override PacketType RequestType => PacketType.CheckPasswordRequest;
     public override ServerKind Server => ServerKind.Game;
 
-    public override Task HandleAsync(CheckPasswordRequest request, GumonjiSession session, CancellationToken ct)
+    public override async Task HandleAsync(CheckPasswordRequest request, GumonjiSession session, CancellationToken ct)
     {
         if (session.UserId is not null)
             throw new InvalidDataException("duplicate CHECK_PASSWORD on authenticated connection");
-        if (!session.Accounts.Consume(request.UserId, request.Token))
+        if (!await session.Accounts.ConsumeAsync(request.UserId, request.Token, ct))
             throw new InvalidDataException($"CHECK_PASSWORD rejected uid={request.UserId}: invalid/expired/used token");
         session.UserId = request.UserId;
         session.State = SessionState.WaitCharacterCheck;
-        return session.SendAsync(new CheckPasswordAcceptResponse(request.UserId), ct);
+        await session.SendAsync(new CheckPasswordAcceptResponse(request.UserId), ct);
     }
 }

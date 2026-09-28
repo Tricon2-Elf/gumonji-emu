@@ -1,50 +1,60 @@
-using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
+using gumonji.Common.DAL;
+using gumonji.Common.DAL.Entities;
+using gumonji.Common.DAL.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace gumonji.Common.Accounts;
 
-public sealed record Character(byte[] Name, int Body, int Model, int Style, int Color);
-
-public sealed class LocalAccounts
+public sealed class LocalAccounts(
+    IAccountRepository accounts,
+    ICharacterRepository characters,
+    ILoginTokenRepository tokens)
 {
-    private readonly Dictionary<string, uint> _users = [];
-    private readonly Dictionary<string, (uint UserId, long Expiry)> _tokens = [];
+    private readonly IAccountRepository _accounts = accounts;
+    private readonly ICharacterRepository _characters = characters;
+    private readonly ILoginTokenRepository _tokens = tokens;
 
-    public Dictionary<uint, Character> Characters { get; } = [];
+    // Convenience constructor retained for protocol tests and small embedders.
+    public LocalAccounts() : this(CreateTestServices()) { }
 
-    public uint Login(byte[] username)
+    private LocalAccounts((IAccountRepository, ICharacterRepository, ILoginTokenRepository) services)
+        : this(services.Item1, services.Item2, services.Item3) { }
+
+    public Task<uint> LoginAsync(byte[] username, byte[] password, CancellationToken ct = default) =>
+        _accounts.GetOrCreateAsync(username, password, ct);
+
+    public Task<byte[]> IssueAsync(uint userId, string? otpOverride, CancellationToken ct = default) =>
+        _tokens.IssueAsync(userId, otpOverride, ct);
+
+    public Task<bool> ConsumeAsync(uint userId, byte[] token, CancellationToken ct = default) =>
+        _tokens.ConsumeAsync(userId, token, ct);
+
+    public Task<Character?> GetCharacterAsync(uint userId, CancellationToken ct = default) =>
+        _characters.GetByUserIdAsync(userId, ct);
+
+    public Task SaveCharacterAsync(uint userId, Character character, CancellationToken ct = default) =>
+        _characters.SaveAsync(userId, character, ct);
+
+    private static (IAccountRepository, ICharacterRepository, ILoginTokenRepository) CreateTestServices()
     {
-        var key = Convert.ToHexString(username);
-        if (!_users.TryGetValue(key, out var id))
-        {
-            id = (uint)_users.Count + 1;
-            _users[key] = id;
-        }
-        return id;
+        var path = Path.Combine(Path.GetTempPath(), $"gumonji-{Guid.NewGuid():N}.db");
+        var options = new DbContextOptionsBuilder<MainContext>()
+            .UseSqlite($"Data Source={path}")
+            .Options;
+        var factory = new TestContextFactory(options);
+        using var db = factory.CreateDbContext();
+        db.Database.EnsureCreated();
+        return (
+            new AccountRepository(factory),
+            new CharacterRepository(factory),
+            new LoginTokenRepository(factory));
     }
 
-    public byte[] Issue(uint userId, string? otpOverride)
+    private sealed class TestContextFactory(DbContextOptions<MainContext> options)
+        : IDbContextFactory<MainContext>
     {
-        var token = string.IsNullOrEmpty(otpOverride)
-            ? Convert.ToHexString(RandomNumberGenerator.GetBytes(10)).ToLowerInvariant()
-            : otpOverride;
-        var raw = Encoding.ASCII.GetBytes(token);
-        if (raw.Length is < 1 or > 127 || raw.Contains((byte)0))
-            throw new InvalidDataException("OTP must contain 1..127 non-NUL ASCII bytes");
-        var now = Stopwatch.GetTimestamp();
-        foreach (var expired in _tokens.Where(pair => pair.Value.Expiry <= now).Select(pair => pair.Key).ToArray())
-            _tokens.Remove(expired);
-        _tokens[token] = (userId, now + (long)(120 * Stopwatch.Frequency));
-        return raw;
-    }
-
-    public bool Consume(uint userId, byte[] token)
-    {
-        var key = Encoding.ASCII.GetString(token);
-        if (!_tokens.TryGetValue(key, out var entry) || entry.UserId != userId || entry.Expiry <= Stopwatch.GetTimestamp())
-            return false;
-        _tokens.Remove(key);
-        return true;
+        public MainContext CreateDbContext() => new(options);
+        public Task<MainContext> CreateDbContextAsync(CancellationToken ct = default) =>
+            Task.FromResult(new MainContext(options));
     }
 }

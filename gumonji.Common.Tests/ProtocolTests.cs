@@ -156,8 +156,9 @@ public class ProtocolTests
         Assert.Empty(await Receive(dispatcher, notice, sent, "01a500000002"));
         Assert.True(notice.SilentNoReply);
 
-        var character = accounts.Characters[1];
-        Assert.Equal("Local Player"u8.ToArray(), character.Name);
+        var character = await accounts.GetCharacterAsync(1);
+        Assert.NotNull(character);
+        Assert.Equal("Local Player"u8.ToArray(), character!.Name);
         Assert.Equal((0, 10, 4, 0x50), (character.Body, character.Model, character.Style, character.Color));
 
         await Assert.ThrowsAsync<InvalidDataException>(() => Receive(dispatcher, game, sent, "0000232800"));

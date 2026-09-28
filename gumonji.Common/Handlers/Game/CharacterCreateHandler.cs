@@ -11,8 +11,17 @@ public sealed class CharacterCreateHandler : PacketHandlerBase<CharacterCreateRe
     {
         if (session.UserId is null)
             throw new InvalidDataException("CHARACTER_CREATE before game authentication");
-        session.Accounts.Characters[session.UserId.Value] = new Character(
-            request.Name, (int)request.Body, (int)request.Model, (int)request.Style, (int)request.Color);
+        await session.Accounts.SaveCharacterAsync(
+            session.UserId.Value,
+            new DAL.Entities.Character
+            {
+                Name = request.Name,
+                Body = (int)request.Body,
+                Model = (int)request.Model,
+                Style = (int)request.Style,
+                Color = (int)request.Color,
+            },
+            ct);
         session.State = SessionState.CharacterCreated;
         await session.SendAsync(new CharacterCreateAcceptResponse(), ct);
         await session.SendAsync(new CharacterAssignResponse(session.UserId.Value), ct);

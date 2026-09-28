@@ -11,6 +11,7 @@ public sealed record EmuOptions
     public string AdvertiseIp { get; init; } = "127.0.0.1";
     public int HomeZone { get; init; } = 1;
     public string? Otp { get; init; }
+    public string DatabasePath { get; init; } = "gumonji.db";
     public bool Verbose { get; init; }
 }
 
