@@ -38,6 +38,21 @@ public sealed class PacketMetadata(
 /// </summary>
 public enum PacketType : uint
 {
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "MOVEMENT_TOTALS")]
+    MovementTotalsRequest = 0x3E80,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "LOOK_MYCHAR")]
+    CharacterConditionRequest = 0x0866,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "MYCHAR_CONDITION")]
+    CharacterConditionResponse = 0x0868,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "PLANT_HARVEST")]
+    PlantHarvestRequest = 0x1FB8,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "INVENTORY_SLOT")]
+    InventorySlotResponse = 0x03C0,
+
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "HEARTBEAT")]
     HeartbeatRequest = 0x0005,
 

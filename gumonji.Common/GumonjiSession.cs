@@ -62,6 +62,25 @@ public sealed class GumonjiSession
     public uint? LastFacialEmoteId { get; set; }
     public ChatState? LastChat { get; set; }
     public bool IsTypingInChat { get; set; }
+    public uint PositionX { get; set; } = 64000;
+    public uint PositionY { get; set; } = 64000;
+    private long? _playStarted;
+    private long _savedPlaySeconds;
+
+    public void StartPlayTime() => _playStarted ??= Stopwatch.GetTimestamp();
+
+    public async Task SaveConditionAsync(uint walking = 0, uint swimming = 0, CancellationToken ct = default)
+    {
+        if (State != SessionState.ZoneEntered || UserId is null)
+            throw new InvalidDataException("condition report before zone entry");
+        StartPlayTime();
+        var total = (long)Stopwatch.GetElapsedTime(_playStarted!.Value).TotalSeconds;
+        var delta = total - _savedPlaySeconds;
+        if (delta == 0 && walking == 0 && swimming == 0)
+            return;
+        await Accounts.Gameplay.AddConditionAsync(UserId.Value, walking, swimming, delta, ct);
+        _savedPlaySeconds = total;
+    }
 
     public async Task SendAsync(IOutgoingPacket packet, CancellationToken ct = default)
     {

@@ -8,17 +8,19 @@ namespace gumonji.Common.Accounts;
 public sealed class LocalAccounts(
     IAccountRepository accounts,
     ICharacterRepository characters,
-    ILoginTokenRepository tokens)
+    ILoginTokenRepository tokens,
+    IGameplayRepository gameplay)
 {
     private readonly IAccountRepository _accounts = accounts;
     private readonly ICharacterRepository _characters = characters;
     private readonly ILoginTokenRepository _tokens = tokens;
+    public IGameplayRepository Gameplay { get; } = gameplay;
 
     // Convenience constructor retained for protocol tests and small embedders.
     public LocalAccounts() : this(CreateTestServices()) { }
 
-    private LocalAccounts((IAccountRepository, ICharacterRepository, ILoginTokenRepository) services)
-        : this(services.Item1, services.Item2, services.Item3) { }
+    private LocalAccounts((IAccountRepository, ICharacterRepository, ILoginTokenRepository, IGameplayRepository) services)
+        : this(services.Item1, services.Item2, services.Item3, services.Item4) { }
 
     public Task<uint> LoginAsync(byte[] username, byte[] password, CancellationToken ct = default) =>
         _accounts.GetOrCreateAsync(username, password, ct);
@@ -35,7 +37,7 @@ public sealed class LocalAccounts(
     public Task SaveCharacterAsync(uint userId, Character character, CancellationToken ct = default) =>
         _characters.SaveAsync(userId, character, ct);
 
-    private static (IAccountRepository, ICharacterRepository, ILoginTokenRepository) CreateTestServices()
+    private static (IAccountRepository, ICharacterRepository, ILoginTokenRepository, IGameplayRepository) CreateTestServices()
     {
         var path = Path.Combine(Path.GetTempPath(), $"gumonji-{Guid.NewGuid():N}.db");
         var options = new DbContextOptionsBuilder<MainContext>()
@@ -47,7 +49,8 @@ public sealed class LocalAccounts(
         return (
             new AccountRepository(factory),
             new CharacterRepository(factory),
-            new LoginTokenRepository(factory));
+            new LoginTokenRepository(factory),
+            new GameplayRepository(factory));
     }
 
     private sealed class TestContextFactory(DbContextOptions<MainContext> options)

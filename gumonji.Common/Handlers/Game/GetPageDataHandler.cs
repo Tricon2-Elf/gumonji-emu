@@ -18,8 +18,10 @@ public sealed class GetPageDataHandler : IPacketHandler
             return;
         foreach (var tree in SpawnTrees.InChunk(request.ChunkX, request.ChunkY))
         {
+            var state = await session.Accounts.Gameplay.GetPlantAsync(session.Options.HomeZone, tree.Id, ct);
             await session.SendAsync(
-                new PlantPlaceResponse(tree.Id, tree.Subtype, tree.Color, tree.Fertility, tree.X, tree.Y),
+                new PlantPlaceResponse(tree.Id, tree.Subtype, tree.Color, (uint)(state?.Fertility ?? (int)tree.Fertility),
+                    tree.X, tree.Y, (byte)(state?.Stage ?? 4)),
                 ct);
         }
     }

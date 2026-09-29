@@ -9,6 +9,9 @@ public sealed class Character
     public int Model { get; set; }
     public int Style { get; set; }
     public int Color { get; set; }
+    public long PlayedSeconds { get; set; }
+    public long WalkingDistance { get; set; }
+    public long SwimmingDistance { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

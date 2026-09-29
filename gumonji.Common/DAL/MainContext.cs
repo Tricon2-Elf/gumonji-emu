@@ -8,9 +8,20 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
     public DbSet<User> Users => Set<User>();
     public DbSet<Character> Characters => Set<Character>();
     public DbSet<LoginToken> LoginTokens => Set<LoginToken>();
+    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<PlantState> PlantStates => Set<PlantState>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<InventoryItem>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.CharacterId, x.Slot }).IsUnique();
+            e.HasOne<Character>().WithMany().HasForeignKey(x => x.CharacterId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<PlantState>().HasKey(x => new { x.ZoneId, x.PlantId });
+
         b.Entity<User>(e =>
         {
             e.ToTable("Users");

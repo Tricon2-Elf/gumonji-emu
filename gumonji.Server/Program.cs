@@ -34,6 +34,7 @@ public static class Program
         builder.Services.AddSingleton<IAccountRepository, AccountRepository>();
         builder.Services.AddSingleton<ICharacterRepository, CharacterRepository>();
         builder.Services.AddSingleton<ILoginTokenRepository, LoginTokenRepository>();
+        builder.Services.AddSingleton<IGameplayRepository, GameplayRepository>();
         builder.Services.AddSingleton<LocalAccounts>();
         builder.Services.AddSingleton(sp => PacketDispatcher.CreateDefault(sp.GetRequiredService<ILogger<PacketDispatcher>>()));
         builder.Services.AddHostedService<GumonjiHost>();

@@ -9,7 +9,9 @@ public sealed class PositionReportHandler : IPacketHandler
     {
         if (session.State != SessionState.ZoneEntered)
             return Task.CompletedTask;
-        _ = PositionReportRequest.FromBytes(payload.Span);
+        var request = PositionReportRequest.FromBytes(payload.Span);
+        session.PositionX = request.X;
+        session.PositionY = request.Y;
         session.SilentNoReply = true;
         return Task.CompletedTask;
     }

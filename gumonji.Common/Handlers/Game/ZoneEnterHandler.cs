@@ -18,10 +18,15 @@ public sealed class ZoneEnterHandler : PacketHandlerBase<ZoneEnterRequest>
             throw new InvalidDataException("ZONE_ENTER before character assignment");
         session.CharacterId = characterId;
         session.State = SessionState.ZoneEntered;
+        session.PositionX = 64000;
+        session.PositionY = 64000;
+        session.StartPlayTime();
         await session.SendAsync(new ZoneEnterResponse(64, 64), ct);
         await session.SendAsync(new EntityPlaceResponse(characterId, 64, 64), ct);
         await session.SendAsync(
             new CharacterAvatarResponse(characterId, character.Name, character.Body, character.Model, character.Style, character.Color),
             ct);
+        foreach (var item in await session.Accounts.Gameplay.GetInventoryAsync(userId, ct))
+            await session.SendAsync(PlantHarvestHandler.InventoryPacket(item), ct);
     }
 }
