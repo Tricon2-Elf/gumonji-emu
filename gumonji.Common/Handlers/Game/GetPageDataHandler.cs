@@ -13,7 +13,7 @@ public sealed class GetPageDataHandler : IPacketHandler
         if (session.State != SessionState.ZoneEntered || payload.Length != 8)
             throw new InvalidDataException("GET_PAGE_DATA before zone entry or truncated");
         var request = GetPageDataRequest.FromBytes(payload.Span);
-        await session.SendAsync(new PageDataResponse(request.ChunkX, request.ChunkY), ct);
+        await session.SendAsync(TerrainWorld.CreatePage(request.ChunkX, request.ChunkY), ct);
         if (!session.PlantedChunks.Add((request.ChunkX, request.ChunkY)))
             return;
         foreach (var tree in SpawnTrees.InChunk(request.ChunkX, request.ChunkY))
