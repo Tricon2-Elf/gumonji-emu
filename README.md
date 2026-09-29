@@ -1,5 +1,7 @@
 # Gumonji Emulator
 
+![alt text](https://game.watch.impress.co.jp/docs/20040827/gumo01.jpg)
+
 Gumonji Emulator is an independent server emulator for the discontinued Gumonji
 online game. It recreates parts of the original login and game server so the
 client can connect to a locally run server. The project is also a place to
