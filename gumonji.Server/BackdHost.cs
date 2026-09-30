@@ -14,14 +14,14 @@ public sealed class BackdHost(EmuOptions options, BackdProtocol protocol, ILogge
         var listener = new VceListener(
             logger,
             "backd",
-            ServerKind.Femsg, // 16-bit IDs and no game compression envelope.
+            ServerKind.Backd, // 16-bit IDs and no game compression envelope.
             new IPEndPoint(IPAddress.Parse(options.BackdBindAddress), options.BackdPort),
             _ => new BackdSession(),
             async (connection, opcode, body, ct) =>
             {
                 var session = (BackdSession)connection.Session!;
-                await protocol.HandleAsync(session, checked((ushort)opcode), body,
-                    (replyId, replyBody, token) => connection.SendAsync((PacketType)replyId, replyBody, token), ct);
+                await protocol.HandleAsync(session, opcode, body,
+                    (replyType, replyBody, token) => connection.SendAsync(replyType, replyBody, token), ct);
             },
             connection => protocol.Disconnect((BackdSession)connection.Session!));
         return listener.RunAsync(stoppingToken);

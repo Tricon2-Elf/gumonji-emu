@@ -1,9 +1,12 @@
+using System.Reflection;
+
 namespace gumonji.Network;
 
 public enum ServerKind
 {
     Femsg,
     Game,
+    Backd,
 }
 
 public enum PacketDirection
@@ -38,6 +41,67 @@ public sealed class PacketMetadata(
 /// </summary>
 public enum PacketType : uint
 {
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "LoginRequest")]
+    BackdLoginRequest = 1,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "LoginReply")]
+    BackdLoginReply = 2,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "StatusRequest")]
+    BackdStatusRequest = 5,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "StatusReply")]
+    BackdStatusReply = 6,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "CheckPasswordRequest")]
+    BackdCheckPasswordRequest = 107,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "CheckPasswordReply")]
+    BackdCheckPasswordReply = 108,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "GetLockRequest")]
+    BackdGetLockRequest = 201,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "GetLockReply")]
+    BackdGetLockReply = 202,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "PutLockRequest")]
+    BackdPutLockRequest = 203,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "PutLockReply")]
+    BackdPutLockReply = 204,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "SaveCharacterRequest")]
+    BackdSaveCharacterRequest = 501,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "SaveCharacterReply")]
+    BackdSaveCharacterReply = 502,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "LoadCharacterRequest")]
+    BackdLoadCharacterRequest = 503,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "LoadCharacterReply")]
+    BackdLoadCharacterReply = 504,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "CharacterExistsRequest")]
+    BackdCharacterExistsRequest = 507,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "CharacterExistsReply")]
+    BackdCharacterExistsReply = 508,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "UserOnlineRequest")]
+    BackdUserOnlineRequest = 1301,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "UserOfflineRequest")]
+    BackdUserOfflineRequest = 1302,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "AllocateDoorIdsRequest")]
+    BackdAllocateDoorIdsRequest = 1501,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "AllocateDoorIdsReply")]
+    BackdAllocateDoorIdsReply = 1502,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "SellerIdsRequest")]
+    BackdSellerIdsRequest = 1701,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "VendorZonesRequest")]
+    BackdVendorZonesRequest = 1702,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "VendorZonesReply")]
+    BackdVendorZonesReply = 1703,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "AuditRequest")]
+    BackdAuditRequest = 2001,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "SaveHistoryRequest")]
+    BackdSaveHistoryRequest = 2101,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "SaveHistoryReply")]
+    BackdSaveHistoryReply = 2102,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "LoadHistoryRequest")]
+    BackdLoadHistoryRequest = 2111,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "LoadHistoryReply")]
+    BackdLoadHistoryReply = 2112,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "PassageLinksRequest")]
+    BackdPassageLinksRequest = 2409,
+    [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "PassageLinksReply")]
+    BackdPassageLinksReply = 2410,
+
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "MOVEMENT_TOTALS")]
     MovementTotalsRequest = 0x3E80,
 
@@ -263,7 +327,17 @@ public enum PacketType : uint
 
 public static class PacketTypeInfo
 {
+    private static readonly Dictionary<(ServerKind Server, uint Opcode), string> Names =
+        typeof(PacketType).GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Select(field => (Field: field, Metadata: field.GetCustomAttribute<PacketMetadata>()))
+            .Where(entry => entry.Metadata is not null)
+            .ToDictionary(entry => (entry.Metadata!.Server, (uint)(PacketType)entry.Field.GetValue(null)!),
+                entry => entry.Field.Name);
+
     public static int OpcodeWidth(ServerKind kind) => kind == ServerKind.Game ? 4 : 2;
+
+    public static string Name(ServerKind kind, PacketType type) =>
+        Names.TryGetValue((kind, (uint)type), out var name) ? name : $"0x{(uint)type:X}";
 
     public static bool IsDefined(uint opcode) => Enum.IsDefined(typeof(PacketType), opcode);
 }

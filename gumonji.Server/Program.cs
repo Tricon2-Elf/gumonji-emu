@@ -39,7 +39,7 @@ public static class Program
         builder.Services.AddSingleton<LocalAccounts>();
         builder.Services.AddSingleton(sp => PacketDispatcher.CreateDefault(sp.GetRequiredService<ILogger<PacketDispatcher>>()));
         builder.Services.AddHostedService<GumonjiHost>();
-        builder.Services.AddSingleton<BackdProtocol>();
+        builder.Services.AddBackdProtocol();
         builder.Services.AddHostedService<BackdHost>();
         var host = builder.Build();
         await using (var db = await host.Services.GetRequiredService<IDbContextFactory<MainContext>>()

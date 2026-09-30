@@ -35,14 +35,17 @@ public sealed class ClientConnection : IAsyncDisposable
     public ServerKind Kind { get; }
     public object? Session { get; set; }
 
-    public async Task SendAsync(PacketType type, ReadOnlyMemory<byte> body, CancellationToken ct = default)
+    public Task SendAsync(PacketType type, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+        SendCoreAsync((uint)type, PacketTypeInfo.Name(Kind, type), body, ct);
+
+    private async Task SendCoreAsync(uint opcode, string name, ReadOnlyMemory<byte> body, CancellationToken ct)
     {
         var width = PacketTypeInfo.OpcodeWidth(Kind);
         var packet = new byte[width + body.Length];
         if (width == 2)
-            BinaryPrimitives.WriteUInt16BigEndian(packet, (ushort)type);
+            BinaryPrimitives.WriteUInt16BigEndian(packet, checked((ushort)opcode));
         else
-            BinaryPrimitives.WriteUInt32BigEndian(packet, (uint)type);
+            BinaryPrimitives.WriteUInt32BigEndian(packet, opcode);
         body.Span.CopyTo(packet.AsSpan(width));
 
         var framed = new byte[4 + packet.Length];
@@ -62,8 +65,8 @@ public sealed class ClientConnection : IAsyncDisposable
         _logger.LogInformation(
             "{Label} TX {Name} opcode=0x{Opcode:X} bytes={Bytes}",
             Label,
-            type,
-            (uint)type,
+            name,
+            opcode,
             packet.Length);
     }
 
