@@ -26,8 +26,9 @@ public sealed class PlantHarvestHandler : PacketHandlerBase<PlantHarvestRequest>
                 checked((ushort)result.Plant.Y), checked((byte)result.Plant.Stage)), ct);
         }
         // Also explain failed attempts; do not silently swallow full/out-of-range requests.
+        var message = result.Error ?? $"Harvested a {TreeSeeds.Name(result.Item!.Subtype)} seed.";
         await session.SendAsync(new ChatEventResponse(session.CharacterId.Value, "Harvest"u8.ToArray(),
-            Encoding.ASCII.GetBytes(result.Error ?? "Harvested a bamboo tree seed.")), ct);
+            Encoding.ASCII.GetBytes(message)), ct);
     }
 
     internal static InventorySlotResponse InventoryPacket(InventoryItem item) => new(

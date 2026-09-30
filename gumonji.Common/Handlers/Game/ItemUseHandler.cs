@@ -15,7 +15,7 @@ public sealed class ItemUseHandler : PacketHandlerBase<ItemUseRequest>
             throw new InvalidDataException("item use before zone entry");
         var item = (await session.Accounts.Gameplay.GetInventoryAsync(session.UserId.Value, ct))
             .SingleOrDefault(i => i.Slot == request.Slot);
-        if (item is { ItemType: 92, Subtype: 5, Color: 8 })
+        if (item is { ItemType: TreeSeeds.ItemType } && TreeSeeds.IsSupported(item.Subtype, item.Color))
         {
             var result = await session.Accounts.Gameplay.PlantSeedAsync(session.UserId.Value,
                 session.Options.HomeZone, request.Slot, request.X, request.Y,

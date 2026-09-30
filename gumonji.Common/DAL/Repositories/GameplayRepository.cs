@@ -115,8 +115,9 @@ public sealed class GameplayRepository(IDbContextFactory<MainContext> factory) :
         var character = await db.Characters.SingleOrDefaultAsync(c => c.UserId == (long)userId, ct)
             ?? throw new InvalidDataException("seed planting without a saved character");
         var seed = await db.InventoryItems.SingleOrDefaultAsync(i => i.CharacterId == character.Id && i.Slot == (int)slot, ct);
-        if (seed is null || seed.ItemType != 92 || seed.Subtype != 5 || seed.Color != 8)
-            return new(null, null, "That inventory slot does not contain a bamboo seed.");
+        if (seed is null || seed.ItemType != TreeSeeds.ItemType ||
+            !TreeSeeds.IsSupported(seed.Subtype, seed.Color))
+            return new(null, null, "That inventory slot does not contain a supported tree seed.");
         if (await db.Plants.AnyAsync(p => p.ZoneId == zoneId && p.X == x && p.Y == y, ct))
             return new(null, null, "That tile already contains a plant.");
 
@@ -154,17 +155,20 @@ public sealed class GameplayRepository(IDbContextFactory<MainContext> factory) :
             return new(null, null, "Move closer to the tree to harvest it.");
         if (plant.Stage != 4 || plant.Fertility < 200)
             return new(null, plant, "This tree is not ready to harvest.");
+        if (!TreeSeeds.IsSupported(plant.Subtype, plant.Color))
+            return new(null, plant, "This tree does not have a supported seed.");
         var occupied = await db.InventoryItems.Where(i => i.CharacterId == character.Id)
             .Select(i => i.Slot).ToListAsync(ct);
         var slot = Enumerable.Range(0, 16).FirstOrDefault(i => !occupied.Contains(i), -1);
         if (slot < 0)
             return new(null, plant, "Your inventory is full.");
 
-        // Initial green-tree reward: bamboo_tree_seed from item.tmpl.
-        // A valid member of retail's green-tree loot pool, not its full random table.
+        // plant.tmpl tree subtypes 1-5 match item.tmpl tree_seed subtypes 1-5.
+        // Keep the current deterministic reward; retail's random loot table is separate.
         var item = new InventoryItem
         {
-            CharacterId = character.Id, Slot = slot, ItemType = 92, Subtype = 5, Color = 8, Fertility = 200,
+            CharacterId = character.Id, Slot = slot, ItemType = TreeSeeds.ItemType,
+            Subtype = plant.Subtype, Color = plant.Color, Fertility = 200,
         };
         db.InventoryItems.Add(item);
         plant.Fertility -= item.Fertility;

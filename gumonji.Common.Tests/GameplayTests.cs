@@ -175,7 +175,7 @@ public sealed class GameplayTests
         Assert.Equal(0, plantPacket[24]); // stage after object/type/colour and four uints
         var item = Assert.Single(await fixture.Repository.GetInventoryAsync(uid), i => i.ItemType == 92);
         Assert.Equal(92, item.ItemType);
-        Assert.Equal(5, item.Subtype);
+        Assert.Equal(1, item.Subtype);
         Assert.Equal(200, item.Fertility);
         var plant = await fixture.Repository.GetPlantAsync(1, 1000);
         Assert.Equal(35800, plant!.Fertility);
@@ -227,11 +227,12 @@ public sealed class GameplayTests
         var uid = await fixture.CreatePlayer();
         var sent = new List<(PacketType Type, byte[] Body)>();
         var session = await fixture.Session(uid, sent);
-        session.PositionX = 70000;
+        session.PositionX = 71000;
         session.PositionY = 69000;
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
-        var harvested = await fixture.Repository.HarvestAsync(uid, 1, 1000, session.PositionX, session.PositionY);
+        var harvested = await fixture.Repository.HarvestAsync(uid, 1, 1004, session.PositionX, session.PositionY);
         var seed = Assert.IsType<InventoryItem>(harvested.Item);
+        Assert.Equal(5, seed.Subtype);
         var use = new PacketWriter();
         use.Write((uint)seed.Slot);
         use.Write(0u);
@@ -282,6 +283,43 @@ public sealed class GameplayTests
         Assert.Single(await fixture.Repository.GetInventoryAsync(uid));
         Assert.DoesNotContain(await fixture.Repository.GetPlantsInChunkAsync(1, 2, 2),
             p => p.Id >= PlantWorld.PlantedIdBase);
+    }
+
+    [Theory]
+    [InlineData(1000u, 1, 70, 69, 70, 70)]
+    [InlineData(1001u, 2, 72, 69, 72, 70)]
+    [InlineData(1002u, 3, 75, 75, 75, 76)]
+    [InlineData(1003u, 4, 75, 74, 76, 74)]
+    [InlineData(1004u, 5, 71, 69, 71, 70)]
+    public async Task EachTreeYieldsItsMatchingPlantableSeed(
+        uint treeId, int subtype, ushort treeX, ushort treeY, ushort plantX, ushort plantY)
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var harvested = await fixture.Repository.HarvestAsync(
+            uid, 1, treeId, (uint)treeX * 1000, (uint)treeY * 1000);
+        var seed = Assert.IsType<InventoryItem>(harvested.Item);
+        Assert.Equal((TreeSeeds.ItemType, subtype, TreeSeeds.Green),
+            (seed.ItemType, seed.Subtype, seed.Color));
+        var sent = new List<(PacketType Type, byte[] Body)>();
+        var session = await fixture.Session(uid, sent);
+        session.PositionX = (uint)treeX * 1000;
+        session.PositionY = (uint)treeY * 1000;
+        var use = new PacketWriter();
+        use.Write((uint)seed.Slot);
+        use.Write(0u);
+        use.Write(plantX);
+        use.Write(plantY);
+        use.Write(0u);
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemUseRequest,
+            use.ToBytes(), session));
+        Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.InventorySlotResponse,
+            PacketType.PlantPlaceResponse }, sent.Select(p => p.Type));
+        var planted = Assert.Single(await fixture.Repository.GetPlantsInChunkAsync(1, 2, 2),
+            p => p.Id >= PlantWorld.PlantedIdBase);
+        Assert.Equal(subtype, planted.Subtype);
+        Assert.Empty(await fixture.Repository.GetInventoryAsync(uid));
     }
 
     [Fact]
