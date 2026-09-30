@@ -7,8 +7,8 @@ public sealed record EmuOptions
 {
     public string BindAddress { get; init; } = "0.0.0.0";
     public int FemsgPort { get; init; } = 12421;
-    public int GamePort { get; init; } = 23432;
-    public bool EnableGame { get; init; } = true;
+    public int ZonePort { get; init; } = 23432;
+    public bool EnableZone { get; init; } = true;
     public string BackdBindAddress { get; init; } = "127.0.0.1";
     public int BackdPort { get; init; } = 12422;
     public string? BackdPassword { get; init; }

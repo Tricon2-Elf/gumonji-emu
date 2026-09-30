@@ -26,7 +26,7 @@ public sealed class ClientConnection : IAsyncDisposable
         Kind = kind;
         _stream = stream;
         _cipher = cipher;
-        _compression = kind == ServerKind.Game;
+        _compression = kind == ServerKind.Zone;
         _logger = logger;
     }
 
@@ -146,7 +146,7 @@ public sealed class VceListener
             _logger.LogInformation(
                 "{Label} DH exchange complete; transport compression={Compression}",
                 label,
-                _kind == ServerKind.Game ? "vce-gzip-envelope" : "none");
+                _kind == ServerKind.Zone ? "vce-gzip-envelope" : "none");
             connection = new ClientConnection(Guid.NewGuid(), label, _kind, stream, cipher, _logger);
             connection.Session = _attachSession(connection);
             stage = "encrypted application records";
@@ -154,7 +154,7 @@ public sealed class VceListener
             var width = PacketTypeInfo.OpcodeWidth(_kind);
             while (!ct.IsCancellationRequested)
             {
-                var chunk = await VceRecords.ReadAsync(stream, cipher, connection.Kind == ServerKind.Game, ct);
+                var chunk = await VceRecords.ReadAsync(stream, cipher, connection.Kind == ServerKind.Zone, ct);
                 foreach (var frame in frames.Feed(chunk))
                 {
                     if (frame.Length < width)

@@ -50,18 +50,18 @@ public static class Program
 
     private static EmuOptions ParseArgs(string[] args)
     {
-        if (args.Any(arg => arg is not "--backd-only" and not "--no-game" and not "--help"))
-            throw new ArgumentException("supported options: --backd-only, --no-game, --help");
+        if (args.Any(arg => arg is not "--backd-only" and not "--no-zone" and not "--no-game" and not "--help"))
+            throw new ArgumentException("supported options: --backd-only, --no-zone, --help (--no-game is an alias)");
         if (args.Contains("--help"))
         {
-            Console.WriteLine("Usage: dotnet run --project gumonji.Server -- [--backd-only | --no-game]");
+            Console.WriteLine("Usage: dotnet run --project gumonji.Server -- [--backd-only | --no-zone]");
             Environment.Exit(0);
         }
         var options = new EmuOptions
         {
             BackdPassword = Environment.GetEnvironmentVariable("GUMONJI_BACKD_PASSWORD"),
             BackdOnly = args.Contains("--backd-only"),
-            EnableGame = !args.Contains("--no-game"),
+            EnableZone = !args.Contains("--no-zone") && !args.Contains("--no-game"),
         };
         return options;
     }
@@ -81,15 +81,15 @@ public sealed class GumonjiHost(
 
         var bind = IPAddress.Parse(options.BindAddress);
         var femsg = new VceListener(logger, "frontend", ServerKind.Femsg, new IPEndPoint(bind, options.FemsgPort), Attach, OnPacket);
-        if (!options.EnableGame)
+        if (!options.EnableZone)
         {
-            logger.LogInformation("game listener disabled; port {Port} is available for zonesv", options.GamePort);
+            logger.LogInformation("zone listener disabled; port {Port} is available for zonesv", options.ZonePort);
             await femsg.RunAsync(stoppingToken);
             return;
         }
 
-        var game = new VceListener(logger, "game", ServerKind.Game, new IPEndPoint(bind, options.GamePort), Attach, OnPacket);
-        await Task.WhenAll(femsg.RunAsync(stoppingToken), game.RunAsync(stoppingToken));
+        var zone = new VceListener(logger, "zone", ServerKind.Zone, new IPEndPoint(bind, options.ZonePort), Attach, OnPacket);
+        await Task.WhenAll(femsg.RunAsync(stoppingToken), zone.RunAsync(stoppingToken));
     }
 
     private object Attach(ClientConnection connection) =>

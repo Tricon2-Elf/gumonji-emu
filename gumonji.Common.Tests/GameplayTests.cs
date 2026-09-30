@@ -5,7 +5,7 @@ using gumonji.Common.DAL.Repositories;
 using gumonji.Common.World;
 using gumonji.Network;
 using gumonji.Network.Packets.Femsg;
-using gumonji.Network.Packets.Game;
+using gumonji.Network.Packets.Zone;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -90,14 +90,14 @@ public sealed class GameplayTests
             new GameplayRepository(fixture));
         Assert.Equal(uid, await reopenedAccounts.LoginAsync("alice"u8.ToArray(), "password"u8.ToArray()));
         var sent = new List<(PacketType Type, byte[] Body)>();
-        var session = new GumonjiSession(ServerKind.Game, reopenedAccounts, new(), (type, body, _) =>
+        var session = new GumonjiSession(ServerKind.Zone, reopenedAccounts, new(), (type, body, _) =>
         {
             sent.Add((type, body));
             return Task.CompletedTask;
         }) { UserId = uid, State = SessionState.WaitCharacterCheck };
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
 
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.CharacterCheckExistRequest,
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.CharacterCheckExistRequest,
             ReadOnlyMemory<byte>.Empty, session));
         Assert.Equal(SessionState.WaitCharacterLoad, session.State);
         var found = Assert.Single(sent);
@@ -105,7 +105,7 @@ public sealed class GameplayTests
         Assert.Equal("0000000100", Convert.ToHexString(found.Body).ToLowerInvariant());
 
         sent.Clear();
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.CharacterLoadRequest,
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.CharacterLoadRequest,
             ReadOnlyMemory<byte>.Empty, session));
         Assert.Equal(SessionState.CharacterCreated, session.State);
         Assert.Equal((uint)saved!.Id, session.CharacterId);
@@ -177,7 +177,7 @@ public sealed class GameplayTests
         request.Write((ushort)64);
         request.Write(0u);
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemUseRequest,
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ItemUseRequest,
             request.ToBytes(), session));
         Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.CharacterAvatarResponse },
             sent.Select(p => p.Type));
@@ -236,11 +236,11 @@ public sealed class GameplayTests
         totals.Write(uint.MaxValue); // untrusted field cannot select another account
         totals.Write(1230u);
         totals.Write(450u);
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.MovementTotalsRequest, totals.ToBytes(), session));
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.MovementTotalsRequest, totals.ToBytes(), session));
         Assert.Empty(sent);
         Assert.True(session.SilentNoReply);
         await fixture.Repository.AddConditionAsync(uid, 10, 20, 7200);
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.CharacterConditionRequest, ReadOnlyMemory<byte>.Empty, session));
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.CharacterConditionRequest, ReadOnlyMemory<byte>.Empty, session));
         var reply = Assert.Single(sent);
         Assert.Equal(PacketType.CharacterConditionResponse, reply.Type);
         var reader = new PacketReader(reply.Body);
@@ -267,10 +267,10 @@ public sealed class GameplayTests
         var position = new PacketWriter();
         position.Write(70000u);
         position.Write(69000u);
-        await dispatcher.DispatchAsync(ServerKind.Game, PacketType.PositionReportRequest, position.ToBytes(), session);
+        await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.PositionReportRequest, position.ToBytes(), session);
         var harvest = new PacketWriter();
         harvest.Write(1000u);
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.PlantHarvestRequest, harvest.ToBytes(), session));
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.PlantHarvestRequest, harvest.ToBytes(), session));
         Assert.Equal(new[] { PacketType.InventorySlotResponse, PacketType.PlantPlaceResponse, PacketType.ChatEventResponse },
             sent.Select(p => p.Type));
         var itemPacket = sent[0].Body;
@@ -290,13 +290,13 @@ public sealed class GameplayTests
         enter.WriteCompactBytes([]);
         enter.WriteCompactBytes([]);
         enter.Write(1u);
-        await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ZoneEnterRequest, enter.ToBytes(), reconnect);
+        await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ZoneEnterRequest, enter.ToBytes(), reconnect);
         Assert.Contains(sent, p => p.Type == PacketType.InventorySlotResponse && p.Body.SequenceEqual(itemPacket));
         sent.Clear();
         var page = new PacketWriter();
         page.Write(2u);
         page.Write(2u);
-        await dispatcher.DispatchAsync(ServerKind.Game, PacketType.GetPageDataRequest, page.ToBytes(), reconnect);
+        await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.GetPageDataRequest, page.ToBytes(), reconnect);
         Assert.Contains(sent, p => p.Type == PacketType.PlantPlaceResponse && p.Body.SequenceEqual(plantPacket));
     }
 
@@ -343,7 +343,7 @@ public sealed class GameplayTests
         use.Write((ushort)68);
         use.Write(0u);
 
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemUseRequest, use.ToBytes(), session));
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ItemUseRequest, use.ToBytes(), session));
         Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.InventorySlotResponse,
             PacketType.PlantPlaceResponse }, sent.Select(p => p.Type));
         var result = new PacketReader(sent[0].Body);
@@ -365,7 +365,7 @@ public sealed class GameplayTests
         var page = new PacketWriter();
         page.Write(2u);
         page.Write(2u);
-        await dispatcher.DispatchAsync(ServerKind.Game, PacketType.GetPageDataRequest, page.ToBytes(), reconnect);
+        await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.GetPageDataRequest, page.ToBytes(), reconnect);
         Assert.Contains(sent, p => p.Type == PacketType.PlantPlaceResponse &&
             new PacketReader(p.Body).ReadUInt32() == (uint)planted.Id);
     }
@@ -415,7 +415,7 @@ public sealed class GameplayTests
         use.Write(plantY);
         use.Write(0u);
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemUseRequest,
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ItemUseRequest,
             use.ToBytes(), session));
         Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.InventorySlotResponse,
             PacketType.PlantPlaceResponse }, sent.Select(p => p.Type));
@@ -441,13 +441,13 @@ public sealed class GameplayTests
     public async Task NewRequestsRequireEnteredAuthenticatedCharacter()
     {
         using var fixture = new DatabaseFixture();
-        var session = new GumonjiSession(ServerKind.Game, fixture.Accounts, new(), (_, _, _) => Task.CompletedTask);
+        var session = new GumonjiSession(ServerKind.Zone, fixture.Accounts, new(), (_, _, _) => Task.CompletedTask);
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
-        await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Game,
+        await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Zone,
             PacketType.CharacterConditionRequest, ReadOnlyMemory<byte>.Empty, session));
-        await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Game,
+        await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Zone,
             PacketType.PlantHarvestRequest, new byte[4], session));
-        await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Game,
+        await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Zone,
             PacketType.MovementTotalsRequest, new byte[12], session));
     }
 
@@ -537,7 +537,7 @@ public sealed class GameplayTests
         var request = new PacketWriter();
         request.Write(3000u);
 
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemPickupRequest,
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ItemPickupRequest,
             request.ToBytes(), session));
         Assert.Equal(new[] { PacketType.ItemPickupResponse, PacketType.ItemRemoveResponse, PacketType.InventorySlotResponse,
             PacketType.CharacterAvatarResponse }, sent.Select(p => p.Type));
@@ -547,7 +547,7 @@ public sealed class GameplayTests
 
         sent.Clear();
         session.PositionX = 100000;
-        await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemPickupRequest, request.ToBytes(), session);
+        await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ItemPickupRequest, request.ToBytes(), session);
         Assert.Single(sent);
         Assert.Equal(PacketType.ItemPickupResponse, sent[0].Type);
         Assert.NotEqual(0, sent[0].Body[3]);
@@ -592,7 +592,7 @@ public sealed class GameplayTests
         request.Write((byte)0);
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
 
-        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.AnimalMoveRequest,
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.AnimalMoveRequest,
             request.ToBytes(), session));
         Assert.Equal((ushort)84, session.CowX);
         Assert.Equal((ushort)76, session.CowY);
@@ -629,7 +629,7 @@ public sealed class GameplayTests
         public async Task<GumonjiSession> Session(uint uid, List<(PacketType Type, byte[] Body)> sent)
         {
             var character = await Accounts.GetCharacterAsync(uid);
-            var session = new GumonjiSession(ServerKind.Game, Accounts, new(), (type, body, _) =>
+            var session = new GumonjiSession(ServerKind.Zone, Accounts, new(), (type, body, _) =>
             {
                 sent.Add((type, body));
                 return Task.CompletedTask;

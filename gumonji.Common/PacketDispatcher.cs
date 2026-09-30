@@ -55,7 +55,7 @@ public sealed class PacketDispatcher
             PacketType.ChunkSubscribe203A,
             PacketType.ChunkSubscribe206C,
         })
-            handlers.Add(new Handlers.Game.ChunkSubscribeHandler(opcode));
+            handlers.Add(new Handlers.Zone.ChunkSubscribeHandler(opcode));
 
         logger.LogInformation("Registered {Count} packet handlers", handlers.Count);
         return new PacketDispatcher(handlers, logger);

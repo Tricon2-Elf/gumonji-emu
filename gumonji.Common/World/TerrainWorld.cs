@@ -1,4 +1,4 @@
-using gumonji.Network.Packets.Game;
+using gumonji.Network.Packets.Zone;
 
 namespace gumonji.Common.World;
 

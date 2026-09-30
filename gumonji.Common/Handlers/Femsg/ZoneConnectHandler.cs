@@ -13,7 +13,7 @@ public sealed class ZoneConnectHandler : IPacketHandler
         var token = await session.Accounts.IssueAsync(session.UserId.Value, session.Options.Otp, ct);
         session.State = SessionState.HandoffIssued;
         await session.SendAsync(
-            new ZoneHandoffResponse(token, session.Options.AdvertiseIp, (ushort)session.Options.GamePort),
+            new ZoneHandoffResponse(token, session.Options.AdvertiseIp, (ushort)session.Options.ZonePort),
             ct);
     }
 }

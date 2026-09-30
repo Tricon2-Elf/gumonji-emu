@@ -3,7 +3,7 @@
 ![alt text](https://game.watch.impress.co.jp/docs/20040827/gumo01.jpg)
 
 Gumonji Emulator is an independent server emulator for the discontinued Gumonji
-online game. It recreates parts of the original login and game server so the
+online game. It recreates parts of the original login and zone server so the
 client can connect to a locally run server. The project is also a place to
 document and explore the original network protocol.
 
@@ -16,7 +16,7 @@ included.
 
 - `gumonji.Network/` — VCE transport, packet framing and packet definitions.
 - `gumonji.Common/` — packet handlers, sessions, game logic and EF Core data access.
-- `gumonji.Server/` — executable host for the frontend, game, and original
+- `gumonji.Server/` — executable host for the frontend, zone, and original
   `zonesv` backend connections.
 - `gumonji.Common.Tests/` — xUnit tests for protocol and server behavior.
 
@@ -44,7 +44,7 @@ Start both server listeners in one process:
 dotnet run --project gumonji.Server
 ```
 
-By default, the frontend listens on TCP port `12421` and the game server on
+By default, the frontend listens on TCP port `12421` and the zone server on
 `23432`; the experimental original-zone backend listens on `127.0.0.1:12422`.
 SQLite data is stored in `gumonji.db` in the process's working
 directory. The database and its WAL files are ignored by Git. EF Core applies
@@ -68,7 +68,7 @@ gumonji.exe femsg=127.0.0.1 city=1 url=gumonji://1/
 Run only the backend listener with `dotnet run --project gumonji.Server --
 --backd-only`. To run the frontend and backend while leaving TCP `23432` free
 for the original `zonesv`, use `dotnet run --project gumonji.Server --
---no-game`. Without either switch, all three listeners start. The backend
+--no-zone` (`--no-game` remains an alias). Without either switch, all three listeners start. The backend
 accepts the zone's login, player handoff token check, status, character lock, save/load, existence,
 door-ID allocation, and empty passage-link queries described in
 [`docs/zonesv_backd_protocol.md`](docs/zonesv_backd_protocol.md). Packed zone
