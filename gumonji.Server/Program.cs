@@ -28,6 +28,7 @@ public static class Program
             console.TimestampFormat = "HH:mm:ss ";
         });
         builder.Logging.SetMinimumLevel(options.Verbose ? LogLevel.Debug : LogLevel.Information);
+        builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
         builder.Services.AddSingleton(options);
         builder.Services.AddDbContextFactory<MainContext>(db =>
             db.UseSqlite($"Data Source={Path.GetFullPath(options.DatabasePath)}"));
@@ -79,10 +80,13 @@ public sealed class GumonjiHost(
         if (session.State != previous)
             logger.LogInformation("{Label} STATE {Previous} -> {State}", connection.Label, previous, session.State);
         if (!known || (session.SentCount == sent && !session.SilentNoReply))
+        {
             logger.LogWarning(
-                "{Label} NO_REPLY_IMPLEMENTED state={State} opcode=0x{Opcode:X}",
+                "{Label} NO_REPLY_IMPLEMENTED state={State} opcode=0x{Opcode:X} payload={Payload}",
                 connection.Label,
                 session.State,
-                (uint)type);
+                (uint)type,
+                (uint)type is 0x200 or 0x200A ? Convert.ToHexString(body.Span) : "(not captured)");
+        }
     }
 }

@@ -80,6 +80,9 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "ZONE_ENTERED_NOTICE")]
     ZoneEnteredNotice = 0x0198,
 
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "INVENTORY_TEMPLATE_SYNC")]
+    InventoryTemplateNotice = 0x01A3,
+
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "PLAYER_STATE")]
     PlayerStateNotice = 0x01A5,
 
@@ -152,6 +155,18 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "CHARACTER_AVATAR")]
     CharacterAvatarResponse = 0x05F0,
 
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "ITEM_USE")]
+    ItemUseRequest = 0x077C,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "ITEM_USE_RESULT")]
+    ItemUseResponse = 0x077D,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "ITEM_PICKUP")]
+    ItemPickupRequest = 0x0776,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "ITEM_PICKUP_RESULT")]
+    ItemPickupResponse = 0x0777,
+
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "ZONE_ENTER_REQUEST")]
     ZoneEnterRequest = 0x0712,
 
@@ -179,6 +194,12 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "PLANT_PLACE")]
     PlantPlaceResponse = 0x1FA5,
 
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "ANIMAL_PLACE")]
+    AnimalPlaceResponse = 0x2009,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "ANIMAL_MOVE_REQUEST")]
+    AnimalMoveRequest = 0x200A,
+
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHUNK_SUBSCRIBE")]
     ChunkSubscribe200C = 0x200C,
 
@@ -187,6 +208,12 @@ public enum PacketType : uint
 
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHUNK_SUBSCRIBE")]
     ChunkSubscribe206C = 0x206C,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "ITEM_PLACE")]
+    ItemPlaceResponse = 0x206D,
+
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "ITEM_REMOVE")]
+    ItemRemoveResponse = 0x206F,
 
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHARACTER_UI_OPEN")]
     CharacterUiOpenRequest = 0x2199,

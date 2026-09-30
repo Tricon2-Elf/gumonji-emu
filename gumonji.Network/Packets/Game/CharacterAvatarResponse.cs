@@ -6,7 +6,9 @@ public sealed class CharacterAvatarResponse(
     int body,
     int model,
     int style,
-    int color) : IOutgoingPacket
+    int color,
+    byte? vehicleSlot = null,
+    uint vehicleId = 0) : IOutgoingPacket
 {
     public PacketType Type => PacketType.CharacterAvatarResponse;
 
@@ -33,8 +35,26 @@ public sealed class CharacterAvatarResponse(
         writer.WriteCompactCount(0);
         writer.WriteCompactCount(0);
         writer.Write((byte)tint);
-        for (var i = 0; i < 6; i++)
-            writer.WriteCompactCount(0);
+        if (vehicleSlot is { } slot && vehicleId != 0)
+        {
+            // sub_4F7B50 reads these as inventory slot, item type,
+            // subtype, color, item id, and eight item attributes.
+            writer.WriteCompactBytes([slot]);
+            writer.WriteCompactCount(1);
+            writer.Write(ItemTemplateIds.ToyCar);
+            writer.WriteCompactBytes([0]);
+            writer.WriteCompactBytes([0]);
+            writer.WriteCompactCount(1);
+            writer.Write(vehicleId);
+            writer.WriteCompactCount(8);
+            for (var i = 0; i < 8; i++)
+                writer.Write(0u);
+        }
+        else
+        {
+            for (var i = 0; i < 6; i++)
+                writer.WriteCompactCount(0);
+        }
         writer.Write(0u);
         writer.WriteCompactCount(0);
         writer.Write((byte)0);

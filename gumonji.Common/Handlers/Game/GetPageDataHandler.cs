@@ -24,5 +24,13 @@ public sealed class GetPageDataHandler : IPacketHandler
                     tree.X, tree.Y, (byte)(state?.Stage ?? 4)),
                 ct);
         }
+        if (request.ChunkX == (uint)session.CowX / SpawnTrees.PageEdge &&
+            request.ChunkY == (uint)session.CowY / SpawnTrees.PageEdge)
+            await session.SendAsync(new AnimalPlaceResponse(SpawnActors.CowId, session.CowX, session.CowY), ct);
+        if (request.ChunkX == SpawnActors.ChunkX && request.ChunkY == SpawnActors.ChunkY)
+        {
+            if (!session.WorldVehiclePickedUp)
+                await session.SendAsync(new ItemPlaceResponse(SpawnActors.CarId, SpawnActors.CarX, SpawnActors.CarY), ct);
+        }
     }
 }

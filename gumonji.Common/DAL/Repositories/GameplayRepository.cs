@@ -10,6 +10,7 @@ public interface IGameplayRepository
 {
     Task AddConditionAsync(uint userId, uint walking, uint swimming, long seconds, CancellationToken ct = default);
     Task<List<InventoryItem>> GetInventoryAsync(uint userId, CancellationToken ct = default);
+    Task<InventoryItem?> EnsureStarterVehicleAsync(uint userId, CancellationToken ct = default);
     Task<PlantState?> GetPlantAsync(int zoneId, uint plantId, CancellationToken ct = default);
     Task<HarvestResult> HarvestAsync(uint userId, int zoneId, uint plantId, uint x, uint y, CancellationToken ct = default);
 }
@@ -34,6 +35,44 @@ public sealed class GameplayRepository(IDbContextFactory<MainContext> factory) :
         return await db.InventoryItems.AsNoTracking()
             .Where(i => db.Characters.Any(c => c.Id == i.CharacterId && c.UserId == (long)userId))
             .OrderBy(i => i.Slot).ToListAsync(ct);
+    }
+
+    public async Task<InventoryItem?> EnsureStarterVehicleAsync(uint userId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var character = await db.Characters.SingleOrDefaultAsync(c => c.UserId == (long)userId, ct)
+            ?? throw new InvalidDataException("vehicle grant without a saved character");
+        var current = await db.InventoryItems.FirstOrDefaultAsync(i => i.CharacterId == character.Id && i.ItemType == ItemTemplateIds.ToyCar, ct);
+        if (current is not null)
+            return current;
+        // Previous emulator builds gave every character a black truck as the
+        // starter vehicle. Convert that exact starter item in place so existing
+        // accounts receive the toy car without losing their inventory slot/id.
+        var formerStarter = await db.InventoryItems.FirstOrDefaultAsync(i =>
+            i.CharacterId == character.Id && i.ItemType == ItemTemplateIds.Truck &&
+            i.Subtype == 0 && i.Color == 0 && i.Fertility == 1000, ct);
+        if (formerStarter is not null)
+        {
+            formerStarter.ItemType = ItemTemplateIds.ToyCar;
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return formerStarter;
+        }
+        var occupied = await db.InventoryItems.Where(i => i.CharacterId == character.Id)
+            .Select(i => i.Slot).ToListAsync(ct);
+        var slot = Enumerable.Range(0, 16).FirstOrDefault(i => !occupied.Contains(i), -1);
+        if (slot < 0)
+            return null;
+        var vehicle = new InventoryItem
+        {
+            CharacterId = character.Id, Slot = slot, ItemType = ItemTemplateIds.ToyCar,
+            Subtype = 0, Color = 0, Fertility = 1000,
+        };
+        db.InventoryItems.Add(vehicle);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return vehicle;
     }
 
     public async Task<PlantState?> GetPlantAsync(int zoneId, uint plantId, CancellationToken ct = default)

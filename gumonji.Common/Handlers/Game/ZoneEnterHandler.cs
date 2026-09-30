@@ -26,6 +26,8 @@ public sealed class ZoneEnterHandler : PacketHandlerBase<ZoneEnterRequest>
         await session.SendAsync(
             new CharacterAvatarResponse(characterId, character.Name, character.Body, character.Model, character.Style, character.Color),
             ct);
+        if (character.Id != 0)
+            await session.Accounts.Gameplay.EnsureStarterVehicleAsync(userId, ct);
         foreach (var item in await session.Accounts.Gameplay.GetInventoryAsync(userId, ct))
             await session.SendAsync(PlantHarvestHandler.InventoryPacket(item), ct);
     }

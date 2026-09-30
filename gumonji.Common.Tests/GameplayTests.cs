@@ -55,6 +55,58 @@ public sealed class GameplayTests
         reader.ExpectEnd();
     }
 
+    [Fact]
+    public async Task StarterTruckUseEquipsVehicleInAvatar()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var first = await fixture.Repository.EnsureStarterVehicleAsync(uid);
+        Assert.NotNull(first);
+        Assert.Equal(first.Id, (await fixture.Repository.EnsureStarterVehicleAsync(uid))!.Id);
+        Assert.Single(await fixture.Repository.GetInventoryAsync(uid));
+
+        var sent = new List<(PacketType Type, byte[] Body)>();
+        var session = await fixture.Session(uid, sent);
+        var request = new PacketWriter();
+        request.Write((uint)first.Slot);
+        request.Write(0u);
+        request.Write((ushort)64);
+        request.Write((ushort)64);
+        request.Write(0u);
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemUseRequest,
+            request.ToBytes(), session));
+        Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.CharacterAvatarResponse },
+            sent.Select(p => p.Type));
+        var result = new PacketReader(sent[0].Body);
+        Assert.Equal(0u, result.ReadUInt32());
+        Assert.Equal(0u, result.ReadUInt32());
+        Assert.Equal((uint)first.Slot, result.ReadUInt32());
+        result.ExpectEnd();
+
+        var avatar = new PacketReader(sent[1].Body);
+        Assert.Equal(0u, avatar.ReadUInt32());
+        Assert.Equal(session.CharacterId, avatar.ReadUInt32());
+        for (var i = 0; i < 4; i++) avatar.ReadByte();
+        Assert.Equal("Alice"u8.ToArray(), avatar.ReadCompactBytes());
+        avatar.ReadUInt32();
+        avatar.ReadByte();
+        avatar.ReadUInt32();
+        avatar.ReadUInt32();
+        Assert.Equal(0, avatar.ReadCompactLength());
+        Assert.Equal(0, avatar.ReadCompactLength());
+        avatar.ReadByte();
+        Assert.Equal([(byte)first.Slot], avatar.ReadCompactBytes());
+        Assert.Equal(1, avatar.ReadCompactLength());
+        Assert.Equal(ItemTemplateIds.ToyCar, avatar.ReadUInt16());
+        Assert.Equal([0], avatar.ReadCompactBytes());
+        Assert.Equal([0], avatar.ReadCompactBytes());
+        Assert.Equal(1, avatar.ReadCompactLength());
+        Assert.Equal((uint)first.Id, avatar.ReadUInt32());
+        Assert.Equal(8, avatar.ReadCompactLength());
+        for (var i = 0; i < 8; i++) Assert.Equal(0u, avatar.ReadUInt32());
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(3)]
@@ -121,7 +173,7 @@ public sealed class GameplayTests
         var itemPacket = sent[0].Body;
         var plantPacket = sent[1].Body;
         Assert.Equal(0, plantPacket[24]); // stage after object/type/colour and four uints
-        var item = Assert.Single(await fixture.Repository.GetInventoryAsync(uid));
+        var item = Assert.Single(await fixture.Repository.GetInventoryAsync(uid), i => i.ItemType == 92);
         Assert.Equal(92, item.ItemType);
         Assert.Equal(5, item.Subtype);
         Assert.Equal(200, item.Fertility);
@@ -136,7 +188,7 @@ public sealed class GameplayTests
         enter.WriteCompactBytes([]);
         enter.Write(1u);
         await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ZoneEnterRequest, enter.ToBytes(), reconnect);
-        Assert.Equal(itemPacket, Assert.Single(sent, p => p.Type == PacketType.InventorySlotResponse).Body);
+        Assert.Contains(sent, p => p.Type == PacketType.InventorySlotResponse && p.Body.SequenceEqual(itemPacket));
         sent.Clear();
         var page = new PacketWriter();
         page.Write(2u);
@@ -210,6 +262,81 @@ public sealed class GameplayTests
         Assert.Empty(await db.InventoryItems.ToListAsync());
         Assert.Empty(await db.PlantStates.ToListAsync());
         Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
+    public async Task WorldToyCarPickupAcknowledgesAndEquipsSavedVehicle()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var sent = new List<(PacketType Type, byte[] Body)>();
+        var session = await fixture.Session(uid, sent);
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var request = new PacketWriter();
+        request.Write(3000u);
+
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemPickupRequest,
+            request.ToBytes(), session));
+        Assert.Equal(new[] { PacketType.ItemPickupResponse, PacketType.ItemRemoveResponse, PacketType.InventorySlotResponse,
+            PacketType.CharacterAvatarResponse }, sent.Select(p => p.Type));
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 0, 0, 0x0B, 0xB8 }, sent[0].Body);
+        Assert.NotNull(session.EquippedVehicleId);
+        Assert.Single(await fixture.Repository.GetInventoryAsync(uid), i => i.ItemType == ItemTemplateIds.ToyCar);
+
+        sent.Clear();
+        session.PositionX = 100000;
+        await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemPickupRequest, request.ToBytes(), session);
+        Assert.Single(sent);
+        Assert.Equal(PacketType.ItemPickupResponse, sent[0].Type);
+        Assert.NotEqual(0, sent[0].Body[3]);
+        Assert.Throws<InvalidDataException>(() => ItemPickupRequest.FromBytes([0, 0, 0]));
+    }
+
+    [Fact]
+    public async Task ExistingStarterTruckBecomesToyCarInSameSlot()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        await using (var db = fixture.CreateDbContext())
+        {
+            var character = await db.Characters.SingleAsync();
+            db.InventoryItems.Add(new InventoryItem
+            {
+                CharacterId = character.Id, Slot = 4, ItemType = ItemTemplateIds.Truck,
+                Subtype = 0, Color = 0, Fertility = 1000,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var car = await fixture.Repository.EnsureStarterVehicleAsync(uid);
+        Assert.NotNull(car);
+        Assert.Equal(4, car.Slot);
+        Assert.Equal(ItemTemplateIds.ToyCar, car.ItemType);
+        Assert.Single(await fixture.Repository.GetInventoryAsync(uid));
+    }
+
+    [Fact]
+    public async Task AnimalBumpTracksClientMovementWithoutReplacingAnimal()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var sent = new List<(PacketType Type, byte[] Body)>();
+        var session = await fixture.Session(uid, sent);
+        session.PlantedChunks.Add((2, 2));
+        var request = new PacketWriter();
+        request.Write(2000u);
+        request.Write((ushort)84);
+        request.Write((ushort)76);
+        request.Write((byte)0);
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.AnimalMoveRequest,
+            request.ToBytes(), session));
+        Assert.Equal((ushort)84, session.CowX);
+        Assert.Equal((ushort)76, session.CowY);
+        Assert.Empty(sent);
+        Assert.True(session.SilentNoReply);
+        Assert.Throws<InvalidDataException>(() => AnimalMoveRequest.FromBytes([0, 0, 0, 1]));
     }
 
     private sealed class DatabaseFixture : IDbContextFactory<MainContext>, IDisposable

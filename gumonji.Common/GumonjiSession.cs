@@ -58,6 +58,11 @@ public sealed class GumonjiSession
     public bool SilentNoReply { get; set; }
     public int SentCount { get; private set; }
     public HashSet<(uint X, uint Y)> PlantedChunks { get; } = [];
+    public ushort CowX { get; set; } = 69;
+    public ushort CowY { get; set; } = 66;
+    public uint? EquippedVehicleId { get; set; }
+    public InventoryTemplateNotice? LastInventoryTemplates { get; set; }
+    public bool WorldVehiclePickedUp { get; set; }
     public ActionEmoteState? LastActionEmote { get; set; }
     public uint? LastFacialEmoteId { get; set; }
     public ChatState? LastChat { get; set; }

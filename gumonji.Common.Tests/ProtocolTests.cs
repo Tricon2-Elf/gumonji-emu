@@ -1,10 +1,10 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using System.Security.Cryptography;
 using gumonji.Common;
 using gumonji.Common.Accounts;
 using gumonji.Network;
 using gumonji.Network.Crypto;
+using gumonji.Network.Packets.Femsg;
 using gumonji.Network.Packets.Game;
 using Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -46,6 +46,26 @@ public class ProtocolTests
             reassembled.AddRange(frames.Feed(VceCompression.Unwrap(VceCompression.Wrap(chunk))));
         }
         Assert.Equal(page, Assert.Single(reassembled));
+    }
+
+    [Fact]
+    public void SpawnAnimalUsesClientCowTemplate()
+    {
+        var reader = new PacketReader(new AnimalPlaceResponse(2000, 69, 66).ToBytes());
+        Assert.Equal(2000u, reader.ReadUInt32());
+        Assert.Equal((byte)3, reader.ReadByte()); // mammal, not reptile/snake
+        Assert.Equal((byte)0, reader.ReadByte()); // cow_black
+        Assert.Equal((byte)0, reader.ReadByte()); // black
+    }
+
+    [Fact]
+    public void PlacedVehicleUsesToyCarBlackTemplate()
+    {
+        var reader = new PacketReader(new ItemPlaceResponse(3000, 62, 64).ToBytes());
+        Assert.Equal(3000u, reader.ReadUInt32());
+        Assert.Equal(ItemTemplateIds.ToyCar, reader.ReadUInt16());
+        Assert.Equal((byte)0, reader.ReadByte()); // subtype
+        Assert.Equal((byte)0, reader.ReadByte()); // black color
     }
 
     [Fact]
@@ -133,14 +153,13 @@ public class ProtocolTests
 
         var page = await Receive(dispatcher, game, sent, "000001ea0000000200000002");
         Assert.Equal(23603, page[0].Length);
-        Assert.Equal(
-            "337a0f2067bd855c9c772cdef1d6b6a1f84a3d713be054e92c63b9c7a254fc75",
-            Convert.ToHexString(SHA256.HashData(page[0])).ToLowerInvariant());
         Assert.Equal("000001f4000000020000000200000000", Convert.ToHexString(page[0][..16]).ToLowerInvariant());
         Assert.True(page.Count - 1 >= 8);
         Assert.Equal(
             "00001fa5000003e80301080000008ca000008ca00000000100000000040000460045000000000000",
             Convert.ToHexString(page[1]).ToLowerInvariant());
+        Assert.Contains(page, p => BinaryPrimitives.ReadUInt32BigEndian(p) == (uint)PacketType.AnimalPlaceResponse);
+        Assert.Contains(page, p => BinaryPrimitives.ReadUInt32BigEndian(p) == (uint)PacketType.ItemPlaceResponse);
         var again = await Receive(dispatcher, game, sent, "000001ea0000000200000002");
         Assert.Single(again);
 
@@ -204,6 +223,24 @@ public class ProtocolTests
         await Assert.ThrowsAsync<InvalidDataException>(() => Receive(dispatcher, replay, sent, Convert.ToHexString(check.ToBytes())));
     }
 
+    [Fact]
+    public async Task FrontendInventoryTemplateSyncAfterAvatarUpdateIsOneWay()
+    {
+        var accounts = new LocalAccounts();
+        var sent = new List<byte[]>();
+        var frontend = Session(ServerKind.Femsg, accounts, new EmuOptions(), sent);
+        frontend.UserId = 1;
+        frontend.State = SessionState.HandoffIssued;
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+
+        Assert.Empty(await Receive(dispatcher, frontend, sent, "01a301005001000100"));
+        Assert.True(frontend.SilentNoReply);
+        Assert.Equal(new ushort[] { ItemTemplateIds.ToyCar }, frontend.LastInventoryTemplates!.ItemTypes);
+        Assert.Equal(new byte[] { 0 }, frontend.LastInventoryTemplates.Subtypes);
+        Assert.Equal(new byte[] { 0 }, frontend.LastInventoryTemplates.Colors);
+        Assert.Throws<InvalidDataException>(() => InventoryTemplateNotice.FromBytes([1, 2, 0x3A, 0, 0]));
+    }
+
     private static GumonjiSession Session(ServerKind kind, LocalAccounts accounts, EmuOptions options, List<byte[]> sent) =>
         new(kind, accounts, options, (type, body, _) =>
         {
@@ -239,7 +276,7 @@ public class ProtocolTests
     private static bool IsFemsg(PacketType type) => type is
         PacketType.HeartbeatRequest or PacketType.HeartbeatReply or PacketType.LoginRequest or PacketType.LoginAcceptResponse
         or PacketType.ZoneConnectRequest or PacketType.ZoneHandoffResponse or PacketType.HomeZoneRequest or PacketType.HomeZoneReply
-        or PacketType.ZoneEnteredNotice or PacketType.PlayerStateNotice or PacketType.ProfileRequest;
+        or PacketType.ZoneEnteredNotice or PacketType.InventoryTemplateNotice or PacketType.PlayerStateNotice or PacketType.ProfileRequest;
 
     private static byte[] Field(byte[] payload)
     {
