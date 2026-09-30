@@ -194,8 +194,9 @@ public class ProtocolTests
         var notice = Session(ServerKind.Femsg, accounts, options, sent);
         notice.UserId = 1;
         notice.State = SessionState.HandoffIssued;
-        Assert.Empty(await Receive(dispatcher, notice, sent, "0198"));
-        Assert.True(notice.SilentNoReply);
+        var members = Assert.Single(await Receive(dispatcher, notice, sent, "0198"));
+        Assert.Equal("0199000000000000", Convert.ToHexString(members).ToLowerInvariant());
+        Assert.False(notice.SilentNoReply);
         Assert.Empty(await Receive(dispatcher, notice, sent, "01a500000002"));
         Assert.True(notice.SilentNoReply);
 
@@ -279,7 +280,8 @@ public class ProtocolTests
     private static bool IsFemsg(PacketType type) => type is
         PacketType.HeartbeatRequest or PacketType.HeartbeatReply or PacketType.LoginRequest or PacketType.LoginAcceptResponse
         or PacketType.ZoneConnectRequest or PacketType.ZoneHandoffResponse or PacketType.HomeZoneRequest or PacketType.HomeZoneReply
-        or PacketType.ZoneEnteredNotice or PacketType.InventoryTemplateNotice or PacketType.PlayerStateNotice or PacketType.ProfileRequest;
+        or PacketType.ZoneEnteredNotice or PacketType.ZoneMemberListResponse or PacketType.InventoryTemplateNotice
+        or PacketType.PlayerStateNotice or PacketType.ProfileRequest;
 
     private static byte[] Field(byte[] payload)
     {

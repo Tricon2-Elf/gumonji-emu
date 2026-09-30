@@ -80,6 +80,9 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "ZONE_ENTERED_NOTICE")]
     ZoneEnteredNotice = 0x0198,
 
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ServerToClient, "ZONE_MEMBER_LIST")]
+    ZoneMemberListResponse = 0x0199,
+
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "INVENTORY_TEMPLATE_SYNC")]
     InventoryTemplateNotice = 0x01A3,
 
