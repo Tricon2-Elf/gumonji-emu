@@ -25,6 +25,12 @@ public sealed class LocalAccounts(
     public Task<uint> LoginAsync(byte[] username, byte[] password, CancellationToken ct = default) =>
         _accounts.GetOrCreateAsync(username, password, ct);
 
+    public Task<byte[]> GetTutorialFlagsAsync(uint userId, CancellationToken ct = default) =>
+        _accounts.GetTutorialFlagsAsync(userId, ct);
+
+    public Task<bool> CompleteTutorialAsync(uint userId, uint tutorialId, CancellationToken ct = default) =>
+        _accounts.CompleteTutorialAsync(userId, tutorialId, ct);
+
     public Task<byte[]> IssueAsync(uint userId, string? otpOverride, CancellationToken ct = default) =>
         _tokens.IssueAsync(userId, otpOverride, ct);
 

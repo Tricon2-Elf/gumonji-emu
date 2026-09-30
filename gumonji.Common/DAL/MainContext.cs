@@ -10,6 +10,7 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
     public DbSet<LoginToken> LoginTokens => Set<LoginToken>();
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<Plant> Plants => Set<Plant>();
+    public DbSet<TutorialCompletion> TutorialCompletions => Set<TutorialCompletion>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -27,6 +28,12 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
             e.HasIndex(x => new { x.ZoneId, x.X, x.Y }).IsUnique();
             e.HasOne<Character>().WithMany().HasForeignKey(x => x.CharacterId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<TutorialCompletion>(e =>
+        {
+            e.HasKey(x => new { x.UserId, x.TutorialId });
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<User>(e =>

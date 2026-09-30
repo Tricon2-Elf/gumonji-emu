@@ -9,6 +9,7 @@ public sealed class LoginHandler : PacketHandlerBase<LoginRequest>
     {
         session.UserId = await session.Accounts.LoginAsync(request.Username, request.Password, ct);
         session.State = SessionState.WaitZoneRequest;
-        await session.SendAsync(new LoginAcceptResponse(session.UserId.Value), ct);
+        var tutorialFlags = await session.Accounts.GetTutorialFlagsAsync(session.UserId.Value, ct);
+        await session.SendAsync(new LoginAcceptResponse(session.UserId.Value, tutorialFlags), ct);
     }
 }

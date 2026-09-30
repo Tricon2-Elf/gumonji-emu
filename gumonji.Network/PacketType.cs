@@ -92,6 +92,12 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "PROFILE_REQUEST")]
     ProfileRequest = 0x08FD,
 
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "TUTORIAL_COMPLETE")]
+    TutorialCompleteRequest = 0x0899,
+
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ServerToClient, "TUTORIAL_COMPLETE_RESULT")]
+    TutorialCompleteResponse = 0x089A,
+
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "PING")]
     PingRequest = 0x0001,
 

@@ -4,6 +4,7 @@ using gumonji.Common.DAL.Entities;
 using gumonji.Common.DAL.Repositories;
 using gumonji.Common.World;
 using gumonji.Network;
+using gumonji.Network.Packets.Femsg;
 using gumonji.Network.Packets.Game;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -15,6 +16,69 @@ namespace gumonji.Common.Tests;
 
 public sealed class GameplayTests
 {
+    [Fact]
+    public async Task TutorialCompletionIsAcknowledgedAndRestoredOnLogin()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var sent = new List<(PacketType Type, byte[] Body)>();
+        var session = new GumonjiSession(ServerKind.Femsg, fixture.Accounts, new(), (type, body, _) =>
+        {
+            sent.Add((type, body));
+            return Task.CompletedTask;
+        }) { UserId = uid, State = SessionState.HandoffIssued };
+        var complete = new PacketWriter();
+        complete.Write(uid);
+        complete.Write(7u);
+
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Femsg, PacketType.TutorialCompleteRequest,
+            complete.ToBytes(), session));
+        Assert.Equal(PacketType.TutorialCompleteResponse, Assert.Single(sent).Type);
+        Assert.Equal("00000000", Convert.ToHexString(sent[0].Body).ToLowerInvariant());
+        await dispatcher.DispatchAsync(ServerKind.Femsg, PacketType.TutorialCompleteRequest,
+            complete.ToBytes(), session);
+        await using (var db = fixture.CreateDbContext())
+            Assert.Single(await db.TutorialCompletions.ToListAsync());
+
+        var reopened = new LocalAccounts(new AccountRepository(fixture), new CharacterRepository(fixture),
+            new LoginTokenRepository(fixture), new GameplayRepository(fixture));
+        sent.Clear();
+        var loginSession = new GumonjiSession(ServerKind.Femsg, reopened, new(), (type, body, _) =>
+        {
+            sent.Add((type, body));
+            return Task.CompletedTask;
+        });
+        var login = new PacketWriter();
+        login.WriteCompactBytes("alice"u8);
+        login.WriteCompactBytes("password"u8);
+        await dispatcher.DispatchAsync(ServerKind.Femsg, PacketType.LoginRequest, login.ToBytes(), loginSession);
+        var response = Assert.Single(sent);
+        Assert.Equal(PacketType.LoginAcceptResponse, response.Type);
+        var reader = new PacketReader(response.Body);
+        Assert.Equal(0u, reader.ReadUInt32());
+        Assert.Equal(uid, reader.ReadUInt32());
+        reader.ReadCompactBytes();
+        reader.ReadUInt32();
+        reader.ReadUInt32();
+        Assert.Equal(1u, reader.ReadUInt32());
+        var flags = reader.ReadCompactBytes();
+        Assert.Equal(100, flags.Length);
+        Assert.Equal(1, flags[7]);
+        Assert.Equal(0, flags[6]);
+        Assert.Equal(1u, reader.ReadUInt32());
+        reader.ExpectEnd();
+
+        Assert.Throws<InvalidDataException>(() => TutorialCompleteRequest.FromBytes([0, 0, 0, 1]));
+        var invalidId = new PacketWriter();
+        invalidId.Write(uid);
+        invalidId.Write(100u);
+        sent.Clear();
+        await dispatcher.DispatchAsync(ServerKind.Femsg, PacketType.TutorialCompleteRequest,
+            invalidId.ToBytes(), session);
+        Assert.Equal("00000001", Convert.ToHexString(Assert.Single(sent).Body).ToLowerInvariant());
+    }
+
     [Fact]
     public async Task SavedCharacterIsOfferedForLoadingOnNextLogin()
     {
