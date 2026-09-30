@@ -23,6 +23,7 @@ included.
 ## Requirements
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- Python 3 if you want to run the original `zonesv` with a patched backend address.
 - A Gumonji client installation configured to connect to your server. The
   installer is available from the [Internet Archive](https://web.archive.org/web/20071025112431/http://www.gumonji.net/download/gumonji_setup.exe).
   Client files and game assets are not distributed with this repository.
@@ -38,14 +39,21 @@ dotnet build gumonji.slnx
 
 ## Run locally
 
-Start both server listeners in one process:
+For the emulator's own frontend, zone, and backend services, run this from the
+repository root:
 
 ```sh
 dotnet run --project gumonji.Server
 ```
 
-By default, the frontend listens on TCP port `12421` and the zone server on
-`23432`; the experimental original-zone backend listens on `127.0.0.1:12422`.
+Then launch the client with:
+
+```text
+gumonji.exe femsg=127.0.0.1 city=1 url=gumonji://1/
+```
+
+The frontend listens on TCP port `12421`, the emulator's zone server on
+`23432`, and Backd on `127.0.0.1:12422` by default.
 SQLite data is stored in `gumonji.db` in the process's working
 directory. The database and its WAL files are ignored by Git. EF Core applies
 pending migrations automatically when the server starts.
@@ -57,47 +65,67 @@ which is suitable when the client runs on the same computer. Server settings
 such as ports, bind address, database path and advertised address are defined
 by `EmuOptions` in `gumonji.Common/GumonjiSession.cs`.
 
-Launch the client with these arguments to connect to the local emulator:
+## Run with the original `zonesv` (experimental)
 
-```sh
-gumonji.exe femsg=127.0.0.1 city=1 url=gumonji://1/
-```
+Use separate terminals for these steps on Windows. Keep the original `zonesv`
+folder and its `1/zonesv.ini` and other assets together. Do not start the
+emulator's zone listener at the same time: both it and `zonesv` use TCP `23432`.
 
-## Original `zonesv` backend (experimental)
+1. From the repository root, patch a **copy** of the original executable. Replace
+   `C:\path\to\zonesv` with your zone-server directory:
 
-Run only the backend listener with `dotnet run --project gumonji.Server --
---backd-only`. To run the frontend and backend while leaving TCP `23432` free
-for the original `zonesv`, use `dotnet run --project gumonji.Server --
---no-zone` (`--no-game` remains an alias). Without either switch, all three listeners start. The backend
-accepts the zone's login, player handoff token check, status, character lock, save/load, existence,
-door-ID allocation, and empty passage-link queries described in
-[`docs/zonesv_backd_protocol.md`](docs/zonesv_backd_protocol.md). Packed zone
-character data is stored in the `BackdCharacters` SQLite table. This is not
-yet a full substitute for the original backend; other generated message IDs
-and a live `zonesv` handshake remain unverified. The backend binds to
-loopback by default. Set `GUMONJI_BACKD_PASSWORD` to require the zone's
-configured server password; without it, any local zone process can log in.
+   ```powershell
+   python .\scripts\patch_zonesv_backd.py "C:\path\to\zonesv\zonesv_win.exe" "C:\path\to\zonesv\zonesv_local.exe"
+   ```
 
-The original zone INI is Blowfish-encrypted. To inspect or change its settings,
-install Python and `pycryptodome`, then decrypt and re-encrypt **copies**:
+   The script changes the EXE's built-in backend address to `127.0.0.1:12422`
+   (domain `orange`). It does not modify the original EXE or the INI, and
+   refuses to overwrite an existing output file. If you already have
+   `zonesv_local.exe`, choose a new output filename.
 
-```sh
+2. From the repository root, start the emulator's frontend and Backd while
+   leaving the zone port free:
+
+   ```powershell
+   dotnet run --project .\gumonji.Server -- --no-zone
+   ```
+
+3. In another terminal, start the patched EXE **from its own directory** so
+   its relative paths resolve:
+
+   ```powershell
+   Set-Location "C:\path\to\zonesv"
+   .\zonesv_local.exe
+   ```
+
+4. Launch the game client with the same connection arguments as above:
+
+   ```text
+   gumonji.exe femsg=127.0.0.1 city=1 url=gumonji://1/
+   ```
+
+The frontend should accept the client on `12421`, then hand it off to the
+original zone server on `23432`; `zonesv` connects back to Backd on `12422`.
+`--backd-only` starts just Backd and will not provide the client-facing
+frontend. `--no-game` remains an alias for `--no-zone`.
+
+Backd supports the messages described in
+[`docs/zonesv_backd_protocol.md`](docs/zonesv_backd_protocol.md), but the
+original-zone integration is still incomplete. The backend binds to loopback
+by default. To enforce the zone's configured server password, set
+`GUMONJI_BACKD_PASSWORD` in the emulator's terminal before starting it;
+without that variable, a local zone process can log in without a password
+check.
+
+The backend address is in the EXE, not `zonesv.ini`. Editing the encrypted
+INI is optional and requires `pycryptodome`. Work on copies and keep the
+decrypted file private because it contains `server_pass`:
+
+```powershell
 python -m pip install pycryptodome
-python scripts/zonesv_ini.py decrypt path/to/1/zonesv.ini zonesv.txt
-python scripts/zonesv_ini.py encrypt zonesv.txt zonesv-new.ini
+python .\scripts\zonesv_ini.py decrypt "C:\path\to\zonesv\1\zonesv.ini" zonesv.txt
+python .\scripts\zonesv_ini.py encrypt zonesv.txt zonesv-new.ini
 ```
-
-This executable keeps its backend address in the binary, not the INI. To
-redirect it to the local listener, patch a separate copy:
-
-```sh
-python scripts/patch_zonesv_backd.py zonesv_win.exe zonesv_local.exe
-```
-
-The patcher checks for exactly one known original address and refuses to
-overwrite its input or an existing output. The INI tool defaults to the
-original zone INI's 2048-byte size; use `--size` for another original INI
-size. Keep the decrypted file private because it contains `server_pass`.
 
 ## Tests
 
