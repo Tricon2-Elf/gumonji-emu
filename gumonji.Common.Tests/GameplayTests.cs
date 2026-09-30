@@ -216,8 +216,72 @@ public sealed class GameplayTests
         }
         var full = await fixture.Repository.HarvestAsync(uid, 1, 1000, 70000, 69000);
         Assert.Equal("Your inventory is full.", full.Error);
-        Assert.Null(await fixture.Repository.GetPlantAsync(1, 1000));
+        Assert.Equal(4, (await fixture.Repository.GetPlantAsync(1, 1000))!.Stage);
         Assert.Equal(16, (await fixture.Repository.GetInventoryAsync(uid)).Count);
+    }
+
+    [Fact]
+    public async Task PlantingBambooSeedConsumesItAndRestoresYoungPlantOnReconnect()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var sent = new List<(PacketType Type, byte[] Body)>();
+        var session = await fixture.Session(uid, sent);
+        session.PositionX = 70000;
+        session.PositionY = 69000;
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var harvested = await fixture.Repository.HarvestAsync(uid, 1, 1000, session.PositionX, session.PositionY);
+        var seed = Assert.IsType<InventoryItem>(harvested.Item);
+        var use = new PacketWriter();
+        use.Write((uint)seed.Slot);
+        use.Write(0u);
+        use.Write((ushort)69);
+        use.Write((ushort)68);
+        use.Write(0u);
+
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.ItemUseRequest, use.ToBytes(), session));
+        Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.InventorySlotResponse,
+            PacketType.PlantPlaceResponse }, sent.Select(p => p.Type));
+        var result = new PacketReader(sent[0].Body);
+        Assert.Equal(0u, result.ReadUInt32());
+        Assert.Equal(0u, result.ReadUInt32());
+        Assert.Equal((uint)seed.Slot, result.ReadUInt32());
+        var inventory = new PacketReader(sent[1].Body);
+        Assert.Equal((byte)seed.Slot, inventory.ReadByte());
+        Assert.Equal(0u, inventory.ReadUInt32());
+        Assert.Equal((ushort)0, inventory.ReadUInt16());
+        Assert.Empty(await fixture.Repository.GetInventoryAsync(uid));
+        var planted = Assert.Single(await fixture.Repository.GetPlantsInChunkAsync(1, 2, 2),
+            p => p.Id >= PlantWorld.PlantedIdBase);
+        Assert.Equal((69, 68, 5, 8, 200, 0),
+            (planted.X, planted.Y, planted.Subtype, planted.Color, planted.Fertility, planted.Stage));
+
+        sent.Clear();
+        var reconnect = await fixture.Session(uid, sent);
+        var page = new PacketWriter();
+        page.Write(2u);
+        page.Write(2u);
+        await dispatcher.DispatchAsync(ServerKind.Game, PacketType.GetPageDataRequest, page.ToBytes(), reconnect);
+        Assert.Contains(sent, p => p.Type == PacketType.PlantPlaceResponse &&
+            new PacketReader(p.Body).ReadUInt32() == (uint)planted.Id);
+    }
+
+    [Fact]
+    public async Task PlantingRejectsOccupiedOrDistantTilesWithoutConsumingSeed()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var harvested = await fixture.Repository.HarvestAsync(uid, 1, 1000, 70000, 69000);
+        var seed = Assert.IsType<InventoryItem>(harvested.Item);
+        Assert.NotNull((await fixture.Repository.PlantSeedAsync(uid, 1, (uint)seed.Slot,
+            70, 69, 70000, 69000)).Error); // existing tree
+        Assert.NotNull((await fixture.Repository.PlantSeedAsync(uid, 1, (uint)seed.Slot,
+            98, 64, 70000, 69000)).Error); // too far away
+        Assert.NotNull((await fixture.Repository.PlantSeedAsync(uid, 1, (uint)seed.Slot,
+            98, 64, 98000, 64000)).Error); // water
+        Assert.Single(await fixture.Repository.GetInventoryAsync(uid));
+        Assert.DoesNotContain(await fixture.Repository.GetPlantsInChunkAsync(1, 2, 2),
+            p => p.Id >= PlantWorld.PlantedIdBase);
     }
 
     [Fact]
@@ -260,8 +324,65 @@ public sealed class GameplayTests
         Assert.Equal(4, character.Color);
         Assert.Equal(0, character.WalkingDistance);
         Assert.Empty(await db.InventoryItems.ToListAsync());
-        Assert.Empty(await db.PlantStates.ToListAsync());
+        Assert.Equal(20, await db.Plants.CountAsync());
+        Assert.Equal(4, (await db.Plants.SingleAsync(p => p.ZoneId == 1 && p.Id == 1000)).Stage);
         Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
+    public async Task UnifiedPlantsMigrationPreservesHarvestedAndPlayerPlantedTrees()
+    {
+        using var fixture = new DatabaseFixture(migrate: false);
+        await using var db = fixture.CreateDbContext();
+        await db.GetService<IMigrator>().MigrateAsync("20260930040016_PlantedSeeds");
+        var uid = await fixture.CreatePlayer();
+        var character = await fixture.Accounts.GetCharacterAsync(uid);
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO PlantStates (ZoneId, PlantId, Fertility, Stage) VALUES (1, 1000, 35800, 0);
+            """);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO PlantedSeeds (Id, ZoneId, CharacterId, X, Y, Subtype, Color, Fertility, Stage)
+            VALUES (7, 1, {character!.Id}, 69, 68, 5, 8, 200, 2);
+            """);
+
+        await db.Database.MigrateAsync();
+
+        var grove = await db.Plants.SingleAsync(p => p.ZoneId == 1 && p.Id == 1000);
+        Assert.Equal((3, 1, 70, 69, 35800, 0),
+            (grove.Type, grove.Subtype, grove.X, grove.Y, grove.Fertility, grove.Stage));
+        var planted = await db.Plants.SingleAsync(p => p.ZoneId == 1 && p.Id == 100007);
+        Assert.Equal((character.Id, 3, 5, 8, 69, 68, 200, 2),
+            (planted.CharacterId, planted.Type, planted.Subtype, planted.Color,
+                planted.X, planted.Y, planted.Fertility, planted.Stage));
+        Assert.Equal(21, await db.Plants.CountAsync());
+    }
+
+    [Fact]
+    public async Task GrovePlacementAndHarvestFollowDatabaseRows()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        await using (var db = fixture.CreateDbContext())
+        {
+            var moved = await db.Plants.SingleAsync(p => p.ZoneId == 1 && p.Id == 1000);
+            moved.X = 80;
+            moved.Y = 80;
+            db.Plants.Remove(await db.Plants.SingleAsync(p => p.ZoneId == 1 && p.Id == 1001));
+            db.Plants.Add(new Plant
+            {
+                ZoneId = 1, Id = 1100, Type = 3, Subtype = 5, Color = 8,
+                X = 81, Y = 80, Fertility = 8000, Stage = 4,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var chunk = await fixture.Repository.GetPlantsInChunkAsync(1, 2, 2);
+        Assert.Contains(chunk, p => p.Id == 1000 && p.X == 80 && p.Y == 80);
+        Assert.Contains(chunk, p => p.Id == 1100);
+        Assert.DoesNotContain(chunk, p => p.Id == 1001);
+        Assert.NotNull((await fixture.Repository.HarvestAsync(uid, 1, 1000, 70000, 69000)).Error);
+        Assert.NotNull((await fixture.Repository.HarvestAsync(uid, 1, 1001, 72000, 69000)).Error);
+        Assert.NotNull((await fixture.Repository.HarvestAsync(uid, 1, 1100, 81000, 80000)).Item);
     }
 
     [Fact]

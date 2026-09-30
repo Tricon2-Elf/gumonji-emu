@@ -12,8 +12,8 @@ public sealed class PingHandler : PacketHandlerBase<PingRequest>
         if (session.State == SessionState.ZoneEntered)
         {
             await session.SaveConditionAsync(ct: ct);
-            if (session.PlantedChunks.Contains(((uint)session.CowX / SpawnTrees.PageEdge,
-                    (uint)session.CowY / SpawnTrees.PageEdge)))
+            if (session.PlantedChunks.Contains(((uint)session.CowX / PlantWorld.PageEdge,
+                    (uint)session.CowY / PlantWorld.PageEdge)))
             {
                 // Continue roaming from the animal's latest client-reported
                 // position instead of teleporting it back to spawn after a bump.

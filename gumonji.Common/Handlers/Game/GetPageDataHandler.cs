@@ -16,16 +16,16 @@ public sealed class GetPageDataHandler : IPacketHandler
         await session.SendAsync(TerrainWorld.CreatePage(request.ChunkX, request.ChunkY), ct);
         if (!session.PlantedChunks.Add((request.ChunkX, request.ChunkY)))
             return;
-        foreach (var tree in SpawnTrees.InChunk(request.ChunkX, request.ChunkY))
-        {
-            var state = await session.Accounts.Gameplay.GetPlantAsync(session.Options.HomeZone, tree.Id, ct);
-            await session.SendAsync(
-                new PlantPlaceResponse(tree.Id, tree.Subtype, tree.Color, (uint)(state?.Fertility ?? (int)tree.Fertility),
-                    tree.X, tree.Y, (byte)(state?.Stage ?? 4)),
-                ct);
-        }
-        if (request.ChunkX == (uint)session.CowX / SpawnTrees.PageEdge &&
-            request.ChunkY == (uint)session.CowY / SpawnTrees.PageEdge)
+        var savedPlants = await session.Accounts.Gameplay.GetPlantsInChunkAsync(
+            session.Options.HomeZone, request.ChunkX, request.ChunkY, ct);
+        foreach (var plant in savedPlants)
+            await session.SendAsync(new PlantPlaceResponse(
+                checked((uint)plant.Id),
+                checked((byte)plant.Subtype), checked((byte)plant.Color),
+                checked((uint)plant.Fertility), checked((ushort)plant.X), checked((ushort)plant.Y),
+                checked((byte)plant.Stage)), ct);
+        if (request.ChunkX == (uint)session.CowX / PlantWorld.PageEdge &&
+            request.ChunkY == (uint)session.CowY / PlantWorld.PageEdge)
             await session.SendAsync(new AnimalPlaceResponse(SpawnActors.CowId, session.CowX, session.CowY), ct);
         if (request.ChunkX == SpawnActors.ChunkX && request.ChunkY == SpawnActors.ChunkY)
         {

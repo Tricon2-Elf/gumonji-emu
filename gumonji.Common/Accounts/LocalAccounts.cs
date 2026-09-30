@@ -45,7 +45,7 @@ public sealed class LocalAccounts(
             .Options;
         var factory = new TestContextFactory(options);
         using var db = factory.CreateDbContext();
-        db.Database.EnsureCreated();
+        db.Database.Migrate();
         return (
             new AccountRepository(factory),
             new CharacterRepository(factory),

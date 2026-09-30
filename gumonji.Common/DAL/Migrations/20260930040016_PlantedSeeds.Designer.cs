@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using gumonji.Common.DAL;
 
@@ -10,9 +11,11 @@ using gumonji.Common.DAL;
 namespace gumonji.Common.DAL.Migrations
 {
     [DbContext(typeof(MainContext))]
-    partial class MainContextModelSnapshot : ModelSnapshot
+    [Migration("20260930040016_PlantedSeeds")]
+    partial class PlantedSeeds
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -122,15 +125,32 @@ namespace gumonji.Common.DAL.Migrations
                     b.ToTable("LoginTokens", (string)null);
                 });
 
-            modelBuilder.Entity("gumonji.Common.DAL.Entities.Plant", b =>
+            modelBuilder.Entity("gumonji.Common.DAL.Entities.PlantState", b =>
                 {
                     b.Property<int>("ZoneId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("Id")
+                    b.Property<int>("PlantId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("CharacterId")
+                    b.Property<int>("Fertility")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ZoneId", "PlantId");
+
+                    b.ToTable("PlantStates");
+                });
+
+            modelBuilder.Entity("gumonji.Common.DAL.Entities.PlantedSeed", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CharacterId")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Color")
@@ -145,23 +165,23 @@ namespace gumonji.Common.DAL.Migrations
                     b.Property<int>("Subtype")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("X")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Y")
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("ZoneId", "Id");
+                    b.Property<int>("ZoneId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
 
                     b.HasIndex("CharacterId");
 
                     b.HasIndex("ZoneId", "X", "Y")
                         .IsUnique();
 
-                    b.ToTable("Plants");
+                    b.ToTable("PlantedSeeds");
                 });
 
             modelBuilder.Entity("gumonji.Common.DAL.Entities.User", b =>
@@ -222,12 +242,13 @@ namespace gumonji.Common.DAL.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("gumonji.Common.DAL.Entities.Plant", b =>
+            modelBuilder.Entity("gumonji.Common.DAL.Entities.PlantedSeed", b =>
                 {
                     b.HasOne("gumonji.Common.DAL.Entities.Character", null)
                         .WithMany()
                         .HasForeignKey("CharacterId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("gumonji.Common.DAL.Entities.User", b =>

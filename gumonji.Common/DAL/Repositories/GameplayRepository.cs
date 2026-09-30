@@ -4,15 +4,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace gumonji.Common.DAL.Repositories;
 
-public sealed record HarvestResult(InventoryItem? Item, PlantState? Plant, string? Error);
+public sealed record HarvestResult(InventoryItem? Item, Plant? Plant, string? Error);
+public sealed record PlantSeedResult(Plant? Plant, int? UsedSlot, string? Error);
 
 public interface IGameplayRepository
 {
     Task AddConditionAsync(uint userId, uint walking, uint swimming, long seconds, CancellationToken ct = default);
     Task<List<InventoryItem>> GetInventoryAsync(uint userId, CancellationToken ct = default);
     Task<InventoryItem?> EnsureStarterVehicleAsync(uint userId, CancellationToken ct = default);
-    Task<PlantState?> GetPlantAsync(int zoneId, uint plantId, CancellationToken ct = default);
+    Task<Plant?> GetPlantAsync(int zoneId, uint plantId, CancellationToken ct = default);
     Task<HarvestResult> HarvestAsync(uint userId, int zoneId, uint plantId, uint x, uint y, CancellationToken ct = default);
+    Task<PlantSeedResult> PlantSeedAsync(uint userId, int zoneId, uint slot, ushort x, ushort y,
+        uint playerX, uint playerY, CancellationToken ct = default);
+    Task<List<Plant>> GetPlantsInChunkAsync(int zoneId, uint chunkX, uint chunkY,
+        CancellationToken ct = default);
 }
 
 public sealed class GameplayRepository(IDbContextFactory<MainContext> factory) : IGameplayRepository
@@ -75,37 +80,78 @@ public sealed class GameplayRepository(IDbContextFactory<MainContext> factory) :
         return vehicle;
     }
 
-    public async Task<PlantState?> GetPlantAsync(int zoneId, uint plantId, CancellationToken ct = default)
+    public async Task<Plant?> GetPlantAsync(int zoneId, uint plantId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.PlantStates.AsNoTracking()
-            .SingleOrDefaultAsync(p => p.ZoneId == zoneId && p.PlantId == (long)plantId, ct);
+        return await db.Plants.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.ZoneId == zoneId && p.Id == (int)plantId, ct);
+    }
+
+    public async Task<List<Plant>> GetPlantsInChunkAsync(int zoneId, uint chunkX, uint chunkY,
+        CancellationToken ct = default)
+    {
+        var minX = checked((int)chunkX * PlantWorld.PageEdge);
+        var minY = checked((int)chunkY * PlantWorld.PageEdge);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Plants.AsNoTracking()
+            .Where(p => p.ZoneId == zoneId && p.X >= minX && p.X < minX + PlantWorld.PageEdge &&
+                p.Y >= minY && p.Y < minY + PlantWorld.PageEdge)
+            .OrderBy(p => p.Id).ToListAsync(ct);
+    }
+
+    public async Task<PlantSeedResult> PlantSeedAsync(uint userId, int zoneId, uint slot, ushort x, ushort y,
+        uint playerX, uint playerY, CancellationToken ct = default)
+    {
+        if (slot >= 16 || x >= TerrainWorld.MapEdge || y >= TerrainWorld.MapEdge)
+            return new(null, null, "Invalid planting slot or tile.");
+        var dx = (double)playerX - x * 1000.0;
+        var dy = (double)playerY - y * 1000.0;
+        if (dx * dx + dy * dy > 4000.0 * 4000.0)
+            return new(null, null, "Move closer to the planting tile.");
+        if (TerrainWorld.Cell(x, y).WaterLevel != 0)
+            return new(null, null, "Seeds cannot be planted in water.");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var character = await db.Characters.SingleOrDefaultAsync(c => c.UserId == (long)userId, ct)
+            ?? throw new InvalidDataException("seed planting without a saved character");
+        var seed = await db.InventoryItems.SingleOrDefaultAsync(i => i.CharacterId == character.Id && i.Slot == (int)slot, ct);
+        if (seed is null || seed.ItemType != 92 || seed.Subtype != 5 || seed.Color != 8)
+            return new(null, null, "That inventory slot does not contain a bamboo seed.");
+        if (await db.Plants.AnyAsync(p => p.ZoneId == zoneId && p.X == x && p.Y == y, ct))
+            return new(null, null, "That tile already contains a plant.");
+
+        var nextId = await db.Plants.Where(p => p.ZoneId == zoneId && p.Id >= (int)PlantWorld.PlantedIdBase)
+            .Select(p => (int?)p.Id).MaxAsync(ct) ?? (int)PlantWorld.PlantedIdBase - 1;
+        var plant = new Plant
+        {
+            ZoneId = zoneId, Id = checked(nextId + 1), CharacterId = character.Id,
+            Type = 3, X = x, Y = y,
+            Subtype = seed.Subtype, Color = seed.Color, Fertility = seed.Fertility, Stage = 0,
+        };
+        db.Plants.Add(plant);
+        db.InventoryItems.Remove(seed);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new(plant, (int)slot, null);
     }
 
     public async Task<HarvestResult> HarvestAsync(uint userId, int zoneId, uint plantId, uint x, uint y,
         CancellationToken ct = default)
     {
-        var tree = SpawnTrees.All.SingleOrDefault(t => t.Id == plantId);
-        if (tree.Id == 0)
-            return new(null, null, "There is no harvestable tree here.");
-        // Position reports use thousandths of a cell; retail checks a four-cell reach.
-        var dx = (double)x - tree.X * 1000;
-        var dy = (double)y - tree.Y * 1000;
-        if (dx * dx + dy * dy > 4000.0 * 4000.0)
-            return new(null, null, "Move closer to the tree to harvest it.");
-
         await using var db = await factory.CreateDbContextAsync(ct);
         // SQLite's immediate transaction serializes the ripe check and slot allocation.
         // Award and tree depletion commit together, including across connections.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var character = await db.Characters.SingleOrDefaultAsync(c => c.UserId == (long)userId, ct)
             ?? throw new InvalidDataException("harvest without a saved character");
-        var plant = await db.PlantStates.FindAsync([zoneId, checked((int)plantId)], ct);
-        if (plant is null)
-        {
-            plant = new PlantState { ZoneId = zoneId, PlantId = (int)plantId, Fertility = (int)tree.Fertility };
-            db.PlantStates.Add(plant);
-        }
+        var plant = await db.Plants.FindAsync([zoneId, checked((int)plantId)], ct);
+        if (plant is null || plant.Type != 3)
+            return new(null, null, "There is no harvestable tree here.");
+        // Position reports use thousandths of a cell; retail checks a four-cell reach.
+        var dx = (double)x - plant.X * 1000;
+        var dy = (double)y - plant.Y * 1000;
+        if (dx * dx + dy * dy > 4000.0 * 4000.0)
+            return new(null, null, "Move closer to the tree to harvest it.");
         if (plant.Stage != 4 || plant.Fertility < 200)
             return new(null, plant, "This tree is not ready to harvest.");
         var occupied = await db.InventoryItems.Where(i => i.CharacterId == character.Id)

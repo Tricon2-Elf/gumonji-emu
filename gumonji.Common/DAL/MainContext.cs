@@ -9,7 +9,7 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
     public DbSet<Character> Characters => Set<Character>();
     public DbSet<LoginToken> LoginTokens => Set<LoginToken>();
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
-    public DbSet<PlantState> PlantStates => Set<PlantState>();
+    public DbSet<Plant> Plants => Set<Plant>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -20,7 +20,14 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
             e.HasOne<Character>().WithMany().HasForeignKey(x => x.CharacterId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<PlantState>().HasKey(x => new { x.ZoneId, x.PlantId });
+        b.Entity<Plant>(e =>
+        {
+            e.HasKey(x => new { x.ZoneId, x.Id });
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.HasIndex(x => new { x.ZoneId, x.X, x.Y }).IsUnique();
+            e.HasOne<Character>().WithMany().HasForeignKey(x => x.CharacterId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
 
         b.Entity<User>(e =>
         {
