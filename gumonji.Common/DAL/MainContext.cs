@@ -11,9 +11,29 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<Plant> Plants => Set<Plant>();
     public DbSet<TutorialCompletion> TutorialCompletions => Set<TutorialCompletion>();
+    public DbSet<BackdCharacter> BackdCharacters => Set<BackdCharacter>();
+    public DbSet<BackdSequence> BackdSequences => Set<BackdSequence>();
+    public DbSet<BackdHistory> BackdHistories => Set<BackdHistory>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<BackdCharacter>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.UserId).ValueGeneratedNever();
+            e.Property(x => x.Payload).IsRequired();
+        });
+        b.Entity<BackdSequence>(e =>
+        {
+            e.HasKey(x => x.Name);
+            e.Property(x => x.Name).IsRequired();
+        });
+        b.Entity<BackdHistory>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.UserId).ValueGeneratedNever();
+            e.Property(x => x.Payload).IsRequired();
+        });
         b.Entity<InventoryItem>(e =>
         {
             e.HasKey(x => x.Id);

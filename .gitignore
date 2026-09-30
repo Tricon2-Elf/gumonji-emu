@@ -2,6 +2,7 @@ bin/
 obj/
 .vs/
 docs/
+scripts/__pycache__/
 *.db
 *.db-shm
 *.db-wal

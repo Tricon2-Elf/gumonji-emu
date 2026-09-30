@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using gumonji.Common.DAL;
 
@@ -10,9 +11,11 @@ using gumonji.Common.DAL;
 namespace gumonji.Common.DAL.Migrations
 {
     [DbContext(typeof(MainContext))]
-    partial class MainContextModelSnapshot : ModelSnapshot
+    [Migration("20260930083752_BackdSequences")]
+    partial class BackdSequences
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -32,23 +35,6 @@ namespace gumonji.Common.DAL.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("BackdCharacters");
-                });
-
-            modelBuilder.Entity("gumonji.Common.DAL.Entities.BackdHistory", b =>
-                {
-                    b.Property<long>("UserId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<byte[]>("Payload")
-                        .IsRequired()
-                        .HasColumnType("BLOB");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("UserId");
-
-                    b.ToTable("BackdHistories");
                 });
 
             modelBuilder.Entity("gumonji.Common.DAL.Entities.BackdSequence", b =>

@@ -11,5 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\gumonji.Common\gumonji.Common.csproj" />
+    <ProjectReference Include="..\gumonji.Server\gumonji.Server.csproj" />
   </ItemGroup>
 </Project>

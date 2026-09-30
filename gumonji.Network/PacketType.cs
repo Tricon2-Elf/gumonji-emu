@@ -83,6 +83,12 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ServerToClient, "ZONE_MEMBER_LIST")]
     ZoneMemberListResponse = 0x0199,
 
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "PROGRESS_VALUE")]
+    ProgressValueRequest = 0x0132,
+
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ServerToClient, "PROGRESS_VALUE_REPLY")]
+    ProgressValueResponse = 0x0133,
+
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "INVENTORY_TEMPLATE_SYNC")]
     InventoryTemplateNotice = 0x01A3,
 

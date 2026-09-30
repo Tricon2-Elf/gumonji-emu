@@ -83,6 +83,7 @@ public sealed class VceListener
     private readonly System.Net.IPEndPoint _endPoint;
     private readonly Func<ClientConnection, object> _attachSession;
     private readonly Func<ClientConnection, PacketType, ReadOnlyMemory<byte>, CancellationToken, Task> _onPacket;
+    private readonly Action<ClientConnection>? _onDisconnect;
 
     public VceListener(
         ILogger logger,
@@ -90,7 +91,8 @@ public sealed class VceListener
         ServerKind kind,
         System.Net.IPEndPoint endPoint,
         Func<ClientConnection, object> attachSession,
-        Func<ClientConnection, PacketType, ReadOnlyMemory<byte>, CancellationToken, Task> onPacket)
+        Func<ClientConnection, PacketType, ReadOnlyMemory<byte>, CancellationToken, Task> onPacket,
+        Action<ClientConnection>? onDisconnect = null)
     {
         _logger = logger;
         _name = name;
@@ -98,6 +100,7 @@ public sealed class VceListener
         _endPoint = endPoint;
         _attachSession = attachSession;
         _onPacket = onPacket;
+        _onDisconnect = onDisconnect;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -180,7 +183,10 @@ public sealed class VceListener
         finally
         {
             if (connection is not null)
+            {
+                _onDisconnect?.Invoke(connection);
                 await connection.DisposeAsync();
+            }
             tcp.Dispose();
         }
     }

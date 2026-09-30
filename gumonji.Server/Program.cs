@@ -39,12 +39,30 @@ public static class Program
         builder.Services.AddSingleton<LocalAccounts>();
         builder.Services.AddSingleton(sp => PacketDispatcher.CreateDefault(sp.GetRequiredService<ILogger<PacketDispatcher>>()));
         builder.Services.AddHostedService<GumonjiHost>();
-        await builder.Build().RunAsync();
+        builder.Services.AddSingleton<BackdProtocol>();
+        builder.Services.AddHostedService<BackdHost>();
+        var host = builder.Build();
+        await using (var db = await host.Services.GetRequiredService<IDbContextFactory<MainContext>>()
+            .CreateDbContextAsync())
+            await db.Database.MigrateAsync();
+        await host.RunAsync();
     }
 
     private static EmuOptions ParseArgs(string[] args)
     {
-        var options = new EmuOptions();
+        if (args.Any(arg => arg is not "--backd-only" and not "--no-game" and not "--help"))
+            throw new ArgumentException("supported options: --backd-only, --no-game, --help");
+        if (args.Contains("--help"))
+        {
+            Console.WriteLine("Usage: dotnet run --project gumonji.Server -- [--backd-only | --no-game]");
+            Environment.Exit(0);
+        }
+        var options = new EmuOptions
+        {
+            BackdPassword = Environment.GetEnvironmentVariable("GUMONJI_BACKD_PASSWORD"),
+            BackdOnly = args.Contains("--backd-only"),
+            EnableGame = !args.Contains("--no-game"),
+        };
         return options;
     }
 }
@@ -53,17 +71,23 @@ public sealed class GumonjiHost(
     EmuOptions options,
     LocalAccounts accounts,
     PacketDispatcher dispatcher,
-    IDbContextFactory<MainContext> dbFactory,
     ILogger<GumonjiHost> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (options.BackdOnly)
+            return;
         logger.LogInformation("SQLite database: {Path}", Path.GetFullPath(options.DatabasePath));
-        await using (var db = await dbFactory.CreateDbContextAsync(stoppingToken))
-            await db.Database.MigrateAsync(stoppingToken);
 
         var bind = IPAddress.Parse(options.BindAddress);
         var femsg = new VceListener(logger, "frontend", ServerKind.Femsg, new IPEndPoint(bind, options.FemsgPort), Attach, OnPacket);
+        if (!options.EnableGame)
+        {
+            logger.LogInformation("game listener disabled; port {Port} is available for zonesv", options.GamePort);
+            await femsg.RunAsync(stoppingToken);
+            return;
+        }
+
         var game = new VceListener(logger, "game", ServerKind.Game, new IPEndPoint(bind, options.GamePort), Attach, OnPacket);
         await Task.WhenAll(femsg.RunAsync(stoppingToken), game.RunAsync(stoppingToken));
     }

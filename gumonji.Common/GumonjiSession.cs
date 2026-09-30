@@ -8,6 +8,11 @@ public sealed record EmuOptions
     public string BindAddress { get; init; } = "0.0.0.0";
     public int FemsgPort { get; init; } = 12421;
     public int GamePort { get; init; } = 23432;
+    public bool EnableGame { get; init; } = true;
+    public string BackdBindAddress { get; init; } = "127.0.0.1";
+    public int BackdPort { get; init; } = 12422;
+    public string? BackdPassword { get; init; }
+    public bool BackdOnly { get; init; }
     public string AdvertiseIp { get; init; } = "127.0.0.1";
     public int HomeZone { get; init; } = 1;
     public string? Otp { get; init; }

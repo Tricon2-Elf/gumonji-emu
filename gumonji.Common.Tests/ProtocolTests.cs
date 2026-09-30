@@ -245,6 +245,18 @@ public class ProtocolTests
         Assert.Throws<InvalidDataException>(() => InventoryTemplateNotice.FromBytes([1, 2, 0x3A, 0, 0]));
     }
 
+    [Fact]
+    public async Task FrontendProgressValueGetsFourByteReply()
+    {
+        var sent = new List<byte[]>();
+        var frontend = Session(ServerKind.Femsg, new LocalAccounts(), new EmuOptions(), sent);
+        frontend.State = SessionState.HandoffIssued;
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var response = Assert.Single(await Receive(dispatcher, frontend, sent, "013200000064"));
+        Assert.Equal("013300000000", Convert.ToHexString(response).ToLowerInvariant());
+        Assert.Throws<InvalidDataException>(() => ProgressValueRequest.FromBytes([0, 0, 0]));
+    }
+
     private static GumonjiSession Session(ServerKind kind, LocalAccounts accounts, EmuOptions options, List<byte[]> sent) =>
         new(kind, accounts, options, (type, body, _) =>
         {
@@ -281,6 +293,7 @@ public class ProtocolTests
         PacketType.HeartbeatRequest or PacketType.HeartbeatReply or PacketType.LoginRequest or PacketType.LoginAcceptResponse
         or PacketType.ZoneConnectRequest or PacketType.ZoneHandoffResponse or PacketType.HomeZoneRequest or PacketType.HomeZoneReply
         or PacketType.ZoneEnteredNotice or PacketType.ZoneMemberListResponse or PacketType.InventoryTemplateNotice
+        or PacketType.ProgressValueRequest or PacketType.ProgressValueResponse
         or PacketType.PlayerStateNotice or PacketType.ProfileRequest;
 
     private static byte[] Field(byte[] payload)
