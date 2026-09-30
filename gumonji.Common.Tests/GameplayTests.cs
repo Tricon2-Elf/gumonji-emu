@@ -16,6 +16,45 @@ namespace gumonji.Common.Tests;
 public sealed class GameplayTests
 {
     [Fact]
+    public async Task SavedCharacterIsOfferedForLoadingOnNextLogin()
+    {
+        using var fixture = new DatabaseFixture();
+        var uid = await fixture.CreatePlayer();
+        var saved = await fixture.Accounts.GetCharacterAsync(uid);
+        var reopenedAccounts = new LocalAccounts(new AccountRepository(fixture),
+            new CharacterRepository(fixture), new LoginTokenRepository(fixture),
+            new GameplayRepository(fixture));
+        Assert.Equal(uid, await reopenedAccounts.LoginAsync("alice"u8.ToArray(), "password"u8.ToArray()));
+        var sent = new List<(PacketType Type, byte[] Body)>();
+        var session = new GumonjiSession(ServerKind.Game, reopenedAccounts, new(), (type, body, _) =>
+        {
+            sent.Add((type, body));
+            return Task.CompletedTask;
+        }) { UserId = uid, State = SessionState.WaitCharacterCheck };
+        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.CharacterCheckExistRequest,
+            ReadOnlyMemory<byte>.Empty, session));
+        Assert.Equal(SessionState.WaitCharacterLoad, session.State);
+        var found = Assert.Single(sent);
+        Assert.Equal(PacketType.CharacterCheckExistResponse, found.Type);
+        Assert.Equal("0000000100", Convert.ToHexString(found.Body).ToLowerInvariant());
+
+        sent.Clear();
+        Assert.True(await dispatcher.DispatchAsync(ServerKind.Game, PacketType.CharacterLoadRequest,
+            ReadOnlyMemory<byte>.Empty, session));
+        Assert.Equal(SessionState.CharacterCreated, session.State);
+        Assert.Equal((uint)saved!.Id, session.CharacterId);
+        var assigned = Assert.Single(sent);
+        Assert.Equal(PacketType.CharacterAssignResponse, assigned.Type);
+        var reader = new PacketReader(assigned.Body);
+        Assert.Equal(0u, reader.ReadUInt32());
+        Assert.Equal((uint)saved.Id, reader.ReadUInt32());
+        reader.ExpectEnd();
+        Assert.Equal("Alice"u8.ToArray(), (await reopenedAccounts.GetCharacterAsync(uid))!.Name);
+    }
+
+    [Fact]
     public void ConditionWireLayoutMatchesClientParser()
     {
         var packet = new CharacterConditionResponse("Alice"u8.ToArray(), 7200, 1230, 450);

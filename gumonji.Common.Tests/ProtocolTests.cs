@@ -213,6 +213,9 @@ public class ProtocolTests
         var returning = Session(ServerKind.Game, accounts, options, sent);
         returning.UserId = 1;
         returning.State = SessionState.WaitCharacterCheck;
+        var existing = Assert.Single(await Receive(dispatcher, returning, sent, "000002da"));
+        Assert.Equal("000002db0000000100", Convert.ToHexString(existing).ToLowerInvariant());
+        Assert.Equal(SessionState.WaitCharacterLoad, returning.State);
         var assigned = Assert.Single(await Receive(dispatcher, returning, sent, "000002c6"));
         Assert.Equal("000002d00000000000000001", Convert.ToHexString(assigned).ToLowerInvariant());
         Assert.Equal(SessionState.CharacterCreated, returning.State);

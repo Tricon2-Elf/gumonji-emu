@@ -7,8 +7,8 @@ public sealed class CharacterLoadHandler : PacketHandlerBase<CharacterLoadReques
 
     public override async Task HandleAsync(CharacterLoadRequest request, GumonjiSession session, CancellationToken ct)
     {
-        if (session.UserId is null)
-            throw new InvalidDataException("CHARACTER_LOAD before game authentication");
+        if (session.UserId is null || session.State != SessionState.WaitCharacterLoad)
+            throw new InvalidDataException("CHARACTER_LOAD before a saved character was offered");
 
         var character = await session.Accounts.GetCharacterAsync(session.UserId.Value, ct);
         if (character is null)

@@ -116,8 +116,8 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHARACTER_CHECK_EXIST")]
     CharacterCheckExistRequest = 0x02DA,
 
-    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "CHARACTER_NOT_FOUND")]
-    CharacterNotFoundResponse = 0x02DB,
+    [PacketMetadata(ServerKind.Game, PacketDirection.ServerToClient, "CHARACTER_CHECK_EXIST_RESPONSE")]
+    CharacterCheckExistResponse = 0x02DB,
 
     [PacketMetadata(ServerKind.Game, PacketDirection.ClientToServer, "CHARACTER_CREATE")]
     CharacterCreateRequest = 0x02E4,

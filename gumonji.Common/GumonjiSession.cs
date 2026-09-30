@@ -22,6 +22,7 @@ public static class SessionState
     public const string HandoffIssued = "HANDOFF_ISSUED";
     public const string WaitCheckPassword = "WAIT_CHECK_PASSWORD";
     public const string WaitCharacterCheck = "WAIT_CHARACTER_CHECK";
+    public const string WaitCharacterLoad = "WAIT_CHARACTER_LOAD";
     public const string CharacterCreationMenu = "CHARACTER_CREATION_MENU";
     public const string CharacterCreated = "CHARACTER_CREATED";
     public const string ZoneEntered = "ZONE_ENTERED";

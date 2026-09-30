@@ -58,6 +58,7 @@ public sealed class GumonjiHost(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        logger.LogInformation("SQLite database: {Path}", Path.GetFullPath(options.DatabasePath));
         await using (var db = await dbFactory.CreateDbContextAsync(stoppingToken))
             await db.Database.MigrateAsync(stoppingToken);
 
