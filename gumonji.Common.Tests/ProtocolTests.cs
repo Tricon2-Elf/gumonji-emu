@@ -199,6 +199,12 @@ public class ProtocolTests
         Assert.False(notice.SilentNoReply);
         Assert.Empty(await Receive(dispatcher, notice, sent, "01a500000002"));
         Assert.True(notice.SilentNoReply);
+        Assert.Empty(await Receive(dispatcher, notice, sent, "01a400000012"));
+        Assert.True(notice.SilentNoReply);
+        Assert.Equal(0x12u, notice.LastFrontendAnimationId);
+        Assert.Empty(await Receive(dispatcher, notice, sent, "01a400000000"));
+        Assert.Equal(0u, notice.LastFrontendAnimationId);
+        Assert.Throws<InvalidDataException>(() => AvatarAnimationNotice.FromBytes([0, 0, 0]));
 
         var character = await accounts.GetCharacterAsync(1);
         Assert.NotNull(character);
@@ -293,6 +299,7 @@ public class ProtocolTests
         PacketType.HeartbeatRequest or PacketType.HeartbeatReply or PacketType.LoginRequest or PacketType.LoginAcceptResponse
         or PacketType.ZoneConnectRequest or PacketType.ZoneHandoffResponse or PacketType.HomeZoneRequest or PacketType.HomeZoneReply
         or PacketType.ZoneEnteredNotice or PacketType.ZoneMemberListResponse or PacketType.InventoryTemplateNotice
+        or PacketType.AvatarAnimationNotice
         or PacketType.ProgressValueRequest or PacketType.ProgressValueResponse
         or PacketType.PlayerStateNotice or PacketType.ProfileRequest;
 

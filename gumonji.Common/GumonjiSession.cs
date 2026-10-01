@@ -68,6 +68,7 @@ public sealed class GumonjiSession
     public ushort CowY { get; set; } = 66;
     public uint? EquippedVehicleId { get; set; }
     public InventoryTemplateNotice? LastInventoryTemplates { get; set; }
+    public uint? LastFrontendAnimationId { get; set; }
     public bool WorldVehiclePickedUp { get; set; }
     public ActionEmoteState? LastActionEmote { get; set; }
     public uint? LastFacialEmoteId { get; set; }

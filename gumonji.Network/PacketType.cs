@@ -156,6 +156,9 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "INVENTORY_TEMPLATE_SYNC")]
     InventoryTemplateNotice = 0x01A3,
 
+    [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "AVATAR_ANIMATION")]
+    AvatarAnimationNotice = 0x01A4,
+
     [PacketMetadata(ServerKind.Femsg, PacketDirection.ClientToServer, "PLAYER_STATE")]
     PlayerStateNotice = 0x01A5,
 
