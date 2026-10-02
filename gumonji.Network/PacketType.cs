@@ -282,6 +282,17 @@ public enum PacketType : uint
     [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "ANIMAL_MOVE_REQUEST")]
     AnimalMoveRequest = 0x200A,
 
+    // Original zonesv decodes these requests and discards their fields.
+    // Keep neutral names until their intended protocol semantics are recovered.
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "UNNAMED_1B62")]
+    NoOp1B62Request = 0x1B62,
+
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "UNNAMED_1FC2")]
+    NoOp1FC2Request = 0x1FC2,
+
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "UNNAMED_2082")]
+    NoOp2082Request = 0x2082,
+
     [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "CHUNK_SUBSCRIBE")]
     ChunkSubscribe200C = 0x200C,
 
