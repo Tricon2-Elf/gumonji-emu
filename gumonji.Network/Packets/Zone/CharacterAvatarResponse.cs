@@ -16,17 +16,14 @@ public sealed class CharacterAvatarResponse(
     {
         if (entityId is 0 or > 0x7FFFFFFF || name.Length > 128)
             throw new InvalidDataException("entity id or character name is out of range");
-        var subtype = body is 0 or 1 ? body : 0;
-        var colortype = model is >= 0 and <= 16 ? model : 0;
-        var eye = style >= 0 && style < PlayerAppearance.StyleEyes.Length ? PlayerAppearance.StyleEyes[style] : 0;
-        var tint = color is >= 0 and < 100 ? color : 0;
+        var appearance = PlayerAppearance.Resolve(body, model, style, color);
         var writer = new PacketWriter();
         writer.Write(0u);
         writer.Write(entityId);
-        writer.Write((byte)1);
-        writer.Write((byte)subtype);
-        writer.Write((byte)colortype);
-        writer.Write((byte)eye);
+        writer.Write(appearance.Type);
+        writer.Write(appearance.Subtype);
+        writer.Write(appearance.ColorType);
+        writer.Write(appearance.Eye);
         writer.WriteCompactBytes(name);
         writer.Write(0u);
         writer.Write((byte)0);
@@ -34,7 +31,7 @@ public sealed class CharacterAvatarResponse(
         writer.Write(0u);
         writer.WriteCompactCount(0);
         writer.WriteCompactCount(0);
-        writer.Write((byte)tint);
+        writer.Write(appearance.Tint);
         if (vehicleSlot is { } slot && vehicleId != 0)
         {
             // sub_4F7B50 reads these as inventory slot, item type,
