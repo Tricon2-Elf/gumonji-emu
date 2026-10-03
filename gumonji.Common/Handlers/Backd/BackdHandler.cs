@@ -3,20 +3,8 @@ using gumonji.Network.Packets.Backd;
 
 namespace gumonji.Common.Handlers.Backd;
 
-public interface IBackdHandler
-{
-    PacketType RequestType { get; }
-    Task<IOutgoingPacket?> HandleAsync(ReadOnlyMemory<byte> payload, BackdSession session,
-        CancellationToken ct);
-}
-
-public abstract class BackdHandler<TRequest> : IBackdHandler
+public abstract class BackdHandler<TRequest> : PacketHandlerBase<TRequest, BackdSession>
     where TRequest : IIncomingPacket<TRequest>
 {
-    public abstract PacketType RequestType { get; }
-    public abstract Task<IOutgoingPacket?> HandleAsync(TRequest request, BackdSession session,
-        CancellationToken ct);
-
-    public Task<IOutgoingPacket?> HandleAsync(ReadOnlyMemory<byte> payload, BackdSession session,
-        CancellationToken ct) => HandleAsync(TRequest.FromBytes(payload.Span), session, ct);
+    public override ServerKind Server => ServerKind.Backd;
 }

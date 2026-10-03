@@ -8,10 +8,10 @@ public sealed class SaveHistoryHandler(BackdState state) : BackdHandler<SaveHist
 {
     public override PacketType RequestType => PacketType.BackdSaveHistoryRequest;
 
-    public override async Task<IOutgoingPacket?> HandleAsync(SaveHistoryRequest request,
+    public override async Task HandleAsync(SaveHistoryRequest request,
         BackdSession session, CancellationToken ct)
     {
         await state.SaveHistoryAsync(request.Values, ct);
-        return new SaveHistoryReply(0u);
+        await session.SendAsync(new SaveHistoryReply(0u), ct);
     }
 }

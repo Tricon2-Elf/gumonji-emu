@@ -8,11 +8,11 @@ public sealed class PutLockHandler(BackdState state) : BackdHandler<PutLockReque
 {
     public override PacketType RequestType => PacketType.BackdPutLockRequest;
 
-    public override Task<IOutgoingPacket?> HandleAsync(PutLockRequest request,
+    public override Task HandleAsync(PutLockRequest request,
         BackdSession session, CancellationToken ct)
     {
         var released = state.PutLock(request.UserId, session.Id);
-        return Task.FromResult<IOutgoingPacket?>(new PutLockReply(request.MessageId,
-            released ? 0u : unchecked((uint)-36), request.UserId));
+        return session.SendAsync(new PutLockReply(request.MessageId,
+            released ? 0u : unchecked((uint)-36), request.UserId), ct);
     }
 }

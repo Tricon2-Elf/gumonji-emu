@@ -6,7 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace gumonji.Server;
 
-public sealed class BackdHost(EmuOptions options, BackdProtocol protocol, ILogger<BackdHost> logger)
+public sealed class BackdHost(EmuOptions options, PacketDispatcher dispatcher, BackdState state,
+    ILogger<BackdHost> logger)
     : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -16,14 +17,13 @@ public sealed class BackdHost(EmuOptions options, BackdProtocol protocol, ILogge
             "backd",
             ServerKind.Backd, // 16-bit IDs and no game compression envelope.
             new IPEndPoint(IPAddress.Parse(options.BackdBindAddress), options.BackdPort),
-            _ => new BackdSession(),
+            connection => new BackdSession((type, body, ct) => connection.SendAsync(type, body, ct)),
             async (connection, opcode, body, ct) =>
             {
                 var session = (BackdSession)connection.Session!;
-                await protocol.HandleAsync(session, opcode, body,
-                    (replyType, replyBody, token) => connection.SendAsync(replyType, replyBody, token), ct);
+                await dispatcher.DispatchAsync(opcode, body, session, ct);
             },
-            connection => protocol.Disconnect((BackdSession)connection.Session!));
+            connection => state.Disconnect((BackdSession)connection.Session!));
         return listener.RunAsync(stoppingToken);
     }
 }

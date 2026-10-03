@@ -1,11 +1,11 @@
 namespace gumonji.Common.Handlers.Zone;
 
-public sealed class PeriodicReportHandler : IPacketHandler
+public sealed class PeriodicReportHandler : SessionPacketHandler<GumonjiSession>
 {
-    public PacketType RequestType => PacketType.PeriodicReportRequest;
-    public ServerKind Server => ServerKind.Zone;
+    public override PacketType RequestType => PacketType.PeriodicReportRequest;
+    public override ServerKind Server => ServerKind.Zone;
 
-    public Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
+    public override Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
     {
         if (session.State != SessionState.ZoneEntered)
             return Task.CompletedTask;

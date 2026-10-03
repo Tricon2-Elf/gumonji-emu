@@ -2,12 +2,12 @@ using gumonji.Common.World;
 
 namespace gumonji.Common.Handlers.Zone;
 
-public sealed class GetPageDataHandler : IPacketHandler
+public sealed class GetPageDataHandler : SessionPacketHandler<GumonjiSession>
 {
-    public PacketType RequestType => PacketType.GetPageDataRequest;
-    public ServerKind Server => ServerKind.Zone;
+    public override PacketType RequestType => PacketType.GetPageDataRequest;
+    public override ServerKind Server => ServerKind.Zone;
 
-    public async Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
+    public override async Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
     {
         session.EnsureZonePacket(RequestType);
         if (session.State != SessionState.ZoneEntered || payload.Length != 8)

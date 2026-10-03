@@ -20,7 +20,7 @@ public sealed class GameplayTests
     {
         using var fixture = new DatabaseFixture();
         var uid = await fixture.CreatePlayer();
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         var sent = new List<(PacketType Type, byte[] Body)>();
         var session = new GumonjiSession(ServerKind.Femsg, fixture.Accounts, fixture.Characters, fixture.LoginTokens, fixture.Repository, new(), (type, body, _) =>
         {
@@ -99,7 +99,7 @@ public sealed class GameplayTests
             sent.Add((type, body));
             return Task.CompletedTask;
         }) { UserId = uid, State = SessionState.WaitCharacterCheck };
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
 
         Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.CharacterCheckExistRequest,
             ReadOnlyMemory<byte>.Empty, session));
@@ -180,7 +180,7 @@ public sealed class GameplayTests
         request.Write((ushort)64);
         request.Write((ushort)64);
         request.Write(0u);
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ItemUseRequest,
             request.ToBytes(), session));
         Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.CharacterAvatarResponse },
@@ -235,7 +235,7 @@ public sealed class GameplayTests
         var uid = await fixture.CreatePlayer();
         var sent = new List<(PacketType Type, byte[] Body)>();
         var session = await fixture.Session(uid, sent);
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         var totals = new PacketWriter();
         totals.Write(uint.MaxValue); // untrusted field cannot select another account
         totals.Write(1230u);
@@ -267,7 +267,7 @@ public sealed class GameplayTests
         var uid = await fixture.CreatePlayer();
         var sent = new List<(PacketType Type, byte[] Body)>();
         var session = await fixture.Session(uid, sent);
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         var position = new PacketWriter();
         position.Write(70000u);
         position.Write(69000u);
@@ -336,7 +336,7 @@ public sealed class GameplayTests
         var session = await fixture.Session(uid, sent);
         session.PositionX = 71000;
         session.PositionY = 69000;
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         var harvested = await fixture.Repository.HarvestAsync(uid, 1, 1004, session.PositionX, session.PositionY);
         var seed = Assert.IsType<InventoryItem>(harvested.Item);
         Assert.Equal(5, seed.Subtype);
@@ -418,7 +418,7 @@ public sealed class GameplayTests
         use.Write(plantX);
         use.Write(plantY);
         use.Write(0u);
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.ItemUseRequest,
             use.ToBytes(), session));
         Assert.Equal(new[] { PacketType.ItemUseResponse, PacketType.InventorySlotResponse,
@@ -446,7 +446,7 @@ public sealed class GameplayTests
     {
         using var fixture = new DatabaseFixture();
         var session = new GumonjiSession(ServerKind.Zone, fixture.Accounts, fixture.Characters, fixture.LoginTokens, fixture.Repository, new(), (_, _, _) => Task.CompletedTask);
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Zone,
             PacketType.CharacterConditionRequest, ReadOnlyMemory<byte>.Empty, session));
         await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Zone,
@@ -537,7 +537,7 @@ public sealed class GameplayTests
         var uid = await fixture.CreatePlayer();
         var sent = new List<(PacketType Type, byte[] Body)>();
         var session = await fixture.Session(uid, sent);
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         var request = new PacketWriter();
         request.Write(3000u);
 
@@ -594,7 +594,7 @@ public sealed class GameplayTests
         request.Write((ushort)84);
         request.Write((ushort)76);
         request.Write((byte)0);
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
 
         Assert.True(await dispatcher.DispatchAsync(ServerKind.Zone, PacketType.AnimalMoveRequest,
             request.ToBytes(), session));

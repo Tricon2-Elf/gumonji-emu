@@ -6,70 +6,68 @@ public interface IPacketHandler
 {
     PacketType RequestType { get; }
     ServerKind Server { get; }
-    Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct = default);
+    Task HandleAsync(ReadOnlyMemory<byte> payload, IPacketSession session, CancellationToken ct = default);
 }
 
-public abstract class PacketHandlerBase<TRequest> : IPacketHandler
-    where TRequest : IIncomingPacket<TRequest>
+public abstract class SessionPacketHandler<TSession> : IPacketHandler
+    where TSession : class, IPacketSession
 {
     public abstract PacketType RequestType { get; }
     public abstract ServerKind Server { get; }
+    public abstract Task HandleAsync(ReadOnlyMemory<byte> payload, TSession session, CancellationToken ct);
 
-    public abstract Task HandleAsync(TRequest request, GumonjiSession session, CancellationToken ct);
+    Task IPacketHandler.HandleAsync(ReadOnlyMemory<byte> payload, IPacketSession session, CancellationToken ct)
+    {
+        if (session is not TSession typed)
+            throw new InvalidDataException($"packet 0x{(uint)RequestType:X} requires {typeof(TSession).Name}");
+        return HandleAsync(payload, typed, ct);
+    }
+}
 
-    public Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
+public abstract class PacketHandlerBase<TRequest, TSession> : SessionPacketHandler<TSession>
+    where TRequest : IIncomingPacket<TRequest>
+    where TSession : class, IPacketSession
+{
+    public abstract Task HandleAsync(TRequest request, TSession session, CancellationToken ct);
+
+    public sealed override Task HandleAsync(ReadOnlyMemory<byte> payload, TSession session, CancellationToken ct)
     {
         var request = TRequest.FromBytes(payload.Span);
         return HandleAsync(request, session, ct);
     }
 }
 
+public abstract class PacketHandlerBase<TRequest> : PacketHandlerBase<TRequest, GumonjiSession>
+    where TRequest : IIncomingPacket<TRequest>;
+
 public sealed class PacketDispatcher
 {
     private readonly Dictionary<(ServerKind Server, PacketType Type), IPacketHandler> _handlers;
-    private readonly ILogger<PacketDispatcher> _logger;
 
     public PacketDispatcher(IEnumerable<IPacketHandler> handlers, ILogger<PacketDispatcher> logger)
     {
-        _logger = logger;
         _handlers = handlers.ToDictionary(handler => (handler.Server, handler.RequestType));
+        logger.LogInformation("Registered {Count} packet handlers", _handlers.Count);
     }
 
-    public static PacketDispatcher CreateDefault(ILogger<PacketDispatcher> logger)
-    {
-        var handlers = new List<IPacketHandler>();
-        foreach (var type in typeof(PacketDispatcher).Assembly.GetTypes())
-        {
-            if (type.IsAbstract || !typeof(IPacketHandler).IsAssignableFrom(type))
-                continue;
-            if (type.GetConstructor(Type.EmptyTypes) is null)
-                continue;
-            handlers.Add((IPacketHandler)Activator.CreateInstance(type)!);
-        }
+    public IReadOnlyCollection<PacketType> GetHandledPacketTypes(ServerKind server) =>
+        _handlers.Keys.Where(key => key.Server == server).Select(key => key.Type).ToArray();
 
-        foreach (var opcode in new[]
-        {
-            PacketType.ChunkSubscribe0Bcc,
-            PacketType.ChunkSubscribe1Fa4,
-            PacketType.ChunkSubscribe200C,
-            PacketType.ChunkSubscribe203A,
-            PacketType.ChunkSubscribe206C,
-        })
-            handlers.Add(new Handlers.Zone.ChunkSubscribeHandler(opcode));
-
-        logger.LogInformation("Registered {Count} packet handlers", handlers.Count);
-        return new PacketDispatcher(handlers, logger);
-    }
+    public Task<bool> DispatchAsync(PacketType type, ReadOnlyMemory<byte> payload,
+        IPacketSession session, CancellationToken ct = default) => DispatchAsync(session.Kind, type, payload, session, ct);
 
     public async Task<bool> DispatchAsync(
         ServerKind server,
         PacketType type,
         ReadOnlyMemory<byte> payload,
-        GumonjiSession session,
+        IPacketSession session,
         CancellationToken ct = default)
     {
         if (!_handlers.TryGetValue((server, type), out var handler))
-            return false;
+            return session.HandleUnknownPacket(type);
+        if (session.Kind != server)
+            throw new InvalidDataException($"{session.Kind} session cannot receive {server} packets");
+        session.ValidateRequest(type);
         await handler.HandleAsync(payload, session, ct);
         return true;
     }

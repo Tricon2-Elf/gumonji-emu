@@ -8,12 +8,12 @@ public sealed class LoadCharacterHandler(BackdState state) : BackdHandler<LoadCh
 {
     public override PacketType RequestType => PacketType.BackdLoadCharacterRequest;
 
-    public override async Task<IOutgoingPacket?> HandleAsync(LoadCharacterRequest request,
+    public override async Task HandleAsync(LoadCharacterRequest request,
         BackdSession session, CancellationToken ct)
     {
         var character = await state.GetCharacterAsync(request.UserId, ct);
-        return new LoadCharacterReply(request.MessageId, request.UserId,
+        await session.SendAsync(new LoadCharacterReply(request.MessageId, request.UserId,
             character is null ? unchecked((uint)-13) : 0u,
-            character?.Payload ?? [], request.Options);
+            character?.Payload ?? [], request.Options), ct);
     }
 }

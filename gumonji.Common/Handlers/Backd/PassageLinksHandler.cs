@@ -8,9 +8,9 @@ public sealed class PassageLinksHandler : BackdHandler<PassageLinksRequest>
 {
     public override PacketType RequestType => PacketType.BackdPassageLinksRequest;
 
-    public override Task<IOutgoingPacket?> HandleAsync(PassageLinksRequest request,
+    public override Task HandleAsync(PassageLinksRequest request,
         BackdSession session, CancellationToken ct)
     {
-        return Task.FromResult<IOutgoingPacket?>(new PassageLinksReply(request.ZoneId));
+        return session.SendAsync(new PassageLinksReply(request.ZoneId), ct);
     }
 }

@@ -61,7 +61,7 @@ public sealed class ZoneNoOpPacketTests
     [InlineData(PacketType.NoOp2082Request, "1234abcd")]
     public async Task RegisteredOnlyForZoneAndSilentEvenBeforeLogin(PacketType opcode, string hex)
     {
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         using var database = new TestDatabaseFixture();
         var session = new GumonjiSession(ServerKind.Zone, database.Accounts, database.Characters,
             database.LoginTokens, database.Gameplay, new(), (_, _, _) =>

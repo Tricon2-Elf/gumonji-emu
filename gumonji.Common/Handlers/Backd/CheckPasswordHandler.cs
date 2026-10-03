@@ -9,11 +9,11 @@ public sealed class CheckPasswordHandler(BackdState state) : BackdHandler<CheckP
 {
     public override PacketType RequestType => PacketType.BackdCheckPasswordRequest;
 
-    public override async Task<IOutgoingPacket?> HandleAsync(CheckPasswordRequest request,
+    public override async Task HandleAsync(CheckPasswordRequest request,
         BackdSession session, CancellationToken ct)
     {
         var (result, username) = await state.CheckLoginAsync(request.UserId, request.Token, ct);
-        return new CheckPasswordReply(request.MessageId, result, request.UserId, 0u,
-            result == 0 ? 1u : 0u, username, [], (ushort)(result == 0 ? 1 : 0));
+        await session.SendAsync(new CheckPasswordReply(request.MessageId, result, request.UserId, 0u,
+            result == 0 ? 1u : 0u, username, [], (ushort)(result == 0 ? 1 : 0)), ct);
     }
 }

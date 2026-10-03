@@ -1,11 +1,11 @@
 namespace gumonji.Common.Handlers.Zone;
 
-public sealed class ChunkSubscribeHandler(PacketType requestType) : IPacketHandler
+public sealed class ChunkSubscribeHandler(PacketType requestType) : SessionPacketHandler<GumonjiSession>
 {
-    public PacketType RequestType { get; } = requestType;
-    public ServerKind Server => ServerKind.Zone;
+    public override PacketType RequestType { get; } = requestType;
+    public override ServerKind Server => ServerKind.Zone;
 
-    public Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
+    public override Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
     {
         session.EnsureZonePacket(RequestType);
         if (payload.Length != 8)

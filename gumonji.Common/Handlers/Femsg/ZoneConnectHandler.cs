@@ -1,11 +1,11 @@
 namespace gumonji.Common.Handlers.Femsg;
 
-public sealed class ZoneConnectHandler : IPacketHandler
+public sealed class ZoneConnectHandler : SessionPacketHandler<GumonjiSession>
 {
-    public PacketType RequestType => PacketType.ZoneConnectRequest;
-    public ServerKind Server => ServerKind.Femsg;
+    public override PacketType RequestType => PacketType.ZoneConnectRequest;
+    public override ServerKind Server => ServerKind.Femsg;
 
-    public async Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
+    public override async Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
     {
         if (session.UserId is null)
             throw new InvalidDataException("zone request before frontend login");

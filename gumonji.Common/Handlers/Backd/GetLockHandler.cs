@@ -8,11 +8,11 @@ public sealed class GetLockHandler(BackdState state) : BackdHandler<GetLockReque
 {
     public override PacketType RequestType => PacketType.BackdGetLockRequest;
 
-    public override Task<IOutgoingPacket?> HandleAsync(GetLockRequest request,
+    public override Task HandleAsync(GetLockRequest request,
         BackdSession session, CancellationToken ct)
     {
         var acquired = state.GetLock(request.UserId, session.Id);
-        return Task.FromResult<IOutgoingPacket?>(new GetLockReply(request.MessageId,
-            acquired ? 0u : unchecked((uint)-36), request.UserId));
+        return session.SendAsync(new GetLockReply(request.MessageId,
+            acquired ? 0u : unchecked((uint)-36), request.UserId), ct);
     }
 }

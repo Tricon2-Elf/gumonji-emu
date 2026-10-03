@@ -38,9 +38,8 @@ public static class Program
         builder.Services.AddSingleton<IGameplayRepository, GameplayRepository>();
         builder.Services.AddSingleton(sp => new ZoneRuntime(audit: message =>
             sp.GetRequiredService<ILogger<ZoneRuntime>>().LogInformation("{Audit}", message)));
-        builder.Services.AddSingleton(sp => PacketDispatcher.CreateDefault(sp.GetRequiredService<ILogger<PacketDispatcher>>()));
+        builder.Services.AddPacketHandlers();
         builder.Services.AddHostedService<GumonjiHost>();
-        builder.Services.AddBackdProtocol();
         builder.Services.AddHostedService<BackdHost>();
         var host = builder.Build();
         await using (var db = await host.Services.GetRequiredService<IDbContextFactory<MainContext>>()

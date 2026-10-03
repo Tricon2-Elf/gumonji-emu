@@ -72,7 +72,7 @@ public class ProtocolTests
     {
         using var database = new TestDatabaseFixture();
         var options = new EmuOptions { ZonePort = 50000, AdvertiseIp = "127.0.0.1" };
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         var sent = new List<byte[]>();
         var front = Session(ServerKind.Femsg, database, options, sent);
         var auth = Assert.Single(await Receive(dispatcher, front, sent, "0065047573657206736563726574"));
@@ -240,7 +240,7 @@ public class ProtocolTests
         var frontend = Session(ServerKind.Femsg, database, new EmuOptions(), sent);
         frontend.UserId = 1;
         frontend.State = SessionState.HandoffIssued;
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
 
         Assert.Empty(await Receive(dispatcher, frontend, sent, "01a301005001000100"));
         Assert.True(frontend.SilentNoReply);
@@ -257,7 +257,7 @@ public class ProtocolTests
         using var database = new TestDatabaseFixture();
         var frontend = Session(ServerKind.Femsg, database, new EmuOptions(), sent);
         frontend.State = SessionState.HandoffIssued;
-        var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+        var dispatcher = TestPacketDispatcher.Create();
         var response = Assert.Single(await Receive(dispatcher, frontend, sent, "013200000064"));
         Assert.Equal("013300000000", Convert.ToHexString(response).ToLowerInvariant());
         Assert.Throws<InvalidDataException>(() => ProgressValueRequest.FromBytes([0, 0, 0]));

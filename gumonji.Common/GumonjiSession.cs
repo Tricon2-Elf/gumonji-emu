@@ -39,7 +39,7 @@ public sealed record ActionEmoteState(uint ActionId, byte Sequence);
 
 public sealed record ChatState(byte[] Sender, byte[] Message);
 
-public sealed class GumonjiSession
+public sealed class GumonjiSession : IPacketSession
 {
     private readonly Func<PacketType, byte[], CancellationToken, Task> _send;
     private long? _clockOrigin;

@@ -12,7 +12,7 @@ namespace gumonji.Common.Tests;
 
 public sealed class ZoneSessionPacketTests
 {
-    private static readonly PacketDispatcher Dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
+    private static readonly PacketDispatcher Dispatcher = TestPacketDispatcher.Create();
 
     [Theory]
     [InlineData(0)]

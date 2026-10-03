@@ -1,11 +1,11 @@
 namespace gumonji.Common.Handlers.Zone;
 
-public sealed class CharacterCheckExistHandler : IPacketHandler
+public sealed class CharacterCheckExistHandler : SessionPacketHandler<GumonjiSession>
 {
-    public PacketType RequestType => PacketType.CharacterCheckExistRequest;
-    public ServerKind Server => ServerKind.Zone;
+    public override PacketType RequestType => PacketType.CharacterCheckExistRequest;
+    public override ServerKind Server => ServerKind.Zone;
 
-    public async Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
+    public override async Task HandleAsync(ReadOnlyMemory<byte> payload, GumonjiSession session, CancellationToken ct)
     {
         if (session.UserId is null || session.State != SessionState.WaitCharacterCheck || payload.Length != 0)
             throw new InvalidDataException("invalid or unauthenticated CHARACTER_CHECK_EXIST");
