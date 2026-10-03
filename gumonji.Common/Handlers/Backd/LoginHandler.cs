@@ -2,8 +2,9 @@ using gumonji.Common;
 using gumonji.Network.Packets.Backd;
 using gumonji.Network;
 using Microsoft.Extensions.Logging;
+using LoginRequest = gumonji.Network.Packets.Backd.LoginRequest;
 
-namespace gumonji.Server.Handlers.Backd;
+namespace gumonji.Common.Handlers.Backd;
 
 public sealed class LoginHandler(EmuOptions options, ILogger<BackdProtocol> logger) : BackdHandler<LoginRequest>
 {

@@ -2,7 +2,7 @@ using gumonji.Network.Packets.Backd;
 using gumonji.Network;
 using Microsoft.Extensions.Logging;
 
-namespace gumonji.Server.Handlers.Backd;
+namespace gumonji.Common.Handlers.Backd;
 
 public sealed class SaveHistoryHandler(BackdState state) : BackdHandler<SaveHistoryRequest>
 {

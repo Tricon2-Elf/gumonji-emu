@@ -1,8 +1,9 @@
 using gumonji.Network.Packets.Backd;
 using gumonji.Network;
 using Microsoft.Extensions.Logging;
+using CheckPasswordRequest = gumonji.Network.Packets.Backd.CheckPasswordRequest;
 
-namespace gumonji.Server.Handlers.Backd;
+namespace gumonji.Common.Handlers.Backd;
 
 public sealed class CheckPasswordHandler(BackdState state) : BackdHandler<CheckPasswordRequest>
 {

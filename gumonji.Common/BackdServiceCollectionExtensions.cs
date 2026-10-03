@@ -1,7 +1,7 @@
-using gumonji.Server.Handlers.Backd;
+using gumonji.Common.Handlers.Backd;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace gumonji.Server;
+namespace gumonji.Common;
 
 public static class BackdServiceCollectionExtensions
 {

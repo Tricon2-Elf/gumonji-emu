@@ -1,15 +1,8 @@
 using gumonji.Network;
-using gumonji.Server.Handlers.Backd;
+using gumonji.Common.Handlers.Backd;
 using Microsoft.Extensions.Logging;
 
-namespace gumonji.Server;
-
-public sealed class BackdSession
-{
-    public Guid Id { get; } = Guid.NewGuid();
-    public string? ZoneName { get; set; }
-    public bool Authenticated => ZoneName is not null;
-}
+namespace gumonji.Common;
 
 /// <summary>Dispatches original zonesv/backend packets to typed handlers.</summary>
 public sealed class BackdProtocol

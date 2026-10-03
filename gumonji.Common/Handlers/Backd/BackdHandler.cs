@@ -1,7 +1,7 @@
 using gumonji.Network;
 using gumonji.Network.Packets.Backd;
 
-namespace gumonji.Server.Handlers.Backd;
+namespace gumonji.Common.Handlers.Backd;
 
 public interface IBackdHandler
 {

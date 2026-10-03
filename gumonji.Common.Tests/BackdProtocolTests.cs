@@ -4,7 +4,6 @@ using gumonji.Common.DAL.Repositories;
 using gumonji.Network;
 using gumonji.Network.Packets.Backd;
 using System.Reflection;
-using gumonji.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

@@ -2,7 +2,7 @@ using gumonji.Network.Packets.Backd;
 using gumonji.Network;
 using Microsoft.Extensions.Logging;
 
-namespace gumonji.Server.Handlers.Backd;
+namespace gumonji.Common.Handlers.Backd;
 
 public sealed class UserOfflineHandler(BackdState state, ILogger<BackdProtocol> logger) : BackdHandler<UserOfflineRequest>
 {

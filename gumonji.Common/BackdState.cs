@@ -5,7 +5,7 @@ using gumonji.Common.DAL.Entities;
 using gumonji.Common.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
 
-namespace gumonji.Server;
+namespace gumonji.Common;
 
 /// <summary>Shared backend state and persistence used by packet handlers.</summary>
 public sealed class BackdState(IDbContextFactory<MainContext> dbFactory)
