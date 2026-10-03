@@ -12,6 +12,8 @@ public sealed class PositionReportHandler : IPacketHandler
         var request = PositionReportRequest.FromBytes(payload.Span);
         session.PositionX = request.X;
         session.PositionY = request.Y;
+        if (session.CharacterId is { } id)
+            session.Zone.Move(id, request.X, request.Y);
         session.SilentNoReply = true;
         return Task.CompletedTask;
     }

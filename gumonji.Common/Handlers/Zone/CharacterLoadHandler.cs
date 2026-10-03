@@ -14,8 +14,8 @@ public sealed class CharacterLoadHandler : PacketHandlerBase<CharacterLoadReques
         if (character is null)
             throw new InvalidDataException("CHARACTER_LOAD requested without a saved character");
 
-        session.CharacterId = checked((uint)character.Id);
+        var entityId = session.AssignCharacter(character.Id);
         session.State = SessionState.CharacterCreated;
-        await session.SendAsync(new CharacterAssignResponse(session.CharacterId.Value), ct);
+        await session.SendAsync(new CharacterAssignResponse(entityId), ct);
     }
 }

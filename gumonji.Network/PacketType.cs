@@ -41,6 +41,25 @@ public sealed class PacketMetadata(
 /// </summary>
 public enum PacketType : uint
 {
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "LOGOUT")]
+    LogoutRequest = 0x0096,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "GET_RENDER_TASK")]
+    RenderTaskRequest = 0x0582,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ServerToClient, "RENDER_TASK")]
+    RenderTaskResponse = 0x0583,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "INFO_POSITION")]
+    EntityPositionRequest = 0x05F3,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ServerToClient, "INFO_POSITION_RESPONSE")]
+    EntityPositionResponse = 0x05F4,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "TAKEOFF")]
+    TakeoffRequest = 0x077A,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "REPORT_ENVIRONMENT")]
+    EnvironmentReportRequest = 0x0BC2,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ClientToServer, "NEAREST_CHARACTER")]
+    NearestCharacterRequest = 0x3EE4,
+    [PacketMetadata(ServerKind.Zone, PacketDirection.ServerToClient, "NEAREST_CHARACTER_RESPONSE")]
+    NearestCharacterResponse = 0x3EE5,
+
     [PacketMetadata(ServerKind.Backd, PacketDirection.ClientToServer, "LoginRequest")]
     BackdLoginRequest = 1,
     [PacketMetadata(ServerKind.Backd, PacketDirection.ServerToClient, "LoginReply")]

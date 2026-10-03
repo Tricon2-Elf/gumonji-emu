@@ -21,6 +21,11 @@ public sealed class ZoneEnterHandler : PacketHandlerBase<ZoneEnterRequest>
         session.PositionX = 64000;
         session.PositionY = 64000;
         session.StartPlayTime();
+        var registeredId = session.Zone.Register(World.ZoneEntityKind.Player, character.Id,
+            session.PositionX, session.PositionY, characterId);
+        if (registeredId != characterId)
+            throw new InvalidDataException("zone entry character id differs from assignment");
+        session.Zone.Attach(session);
         await session.SendAsync(new ZoneEnterResponse(64, 64), ct);
         await session.SendAsync(new EntityPlaceResponse(characterId, 64, 64), ct);
         await session.SendAsync(

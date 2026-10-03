@@ -3,6 +3,7 @@ using gumonji.Common;
 using gumonji.Common.Accounts;
 using gumonji.Common.DAL;
 using gumonji.Common.DAL.Repositories;
+using gumonji.Common.World;
 using Microsoft.EntityFrameworkCore;
 using gumonji.Network;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +38,8 @@ public static class Program
         builder.Services.AddSingleton<ILoginTokenRepository, LoginTokenRepository>();
         builder.Services.AddSingleton<IGameplayRepository, GameplayRepository>();
         builder.Services.AddSingleton<LocalAccounts>();
+        builder.Services.AddSingleton(sp => new ZoneRuntime(audit: message =>
+            sp.GetRequiredService<ILogger<ZoneRuntime>>().LogInformation("{Audit}", message)));
         builder.Services.AddSingleton(sp => PacketDispatcher.CreateDefault(sp.GetRequiredService<ILogger<PacketDispatcher>>()));
         builder.Services.AddHostedService<GumonjiHost>();
         builder.Services.AddBackdProtocol();
@@ -71,6 +74,7 @@ public sealed class GumonjiHost(
     EmuOptions options,
     LocalAccounts accounts,
     PacketDispatcher dispatcher,
+    ZoneRuntime world,
     ILogger<GumonjiHost> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -88,12 +92,15 @@ public sealed class GumonjiHost(
             return;
         }
 
-        var zone = new VceListener(logger, "zone", ServerKind.Zone, new IPEndPoint(bind, options.ZonePort), Attach, OnPacket);
+        var zone = new VceListener(logger, "zone", ServerKind.Zone, new IPEndPoint(bind, options.ZonePort),
+            Attach, OnPacket, onDisconnectAsync: connection =>
+                world.SerializeAsync(() => ((GumonjiSession)connection.Session!).DisconnectAsync()));
         await Task.WhenAll(femsg.RunAsync(stoppingToken), zone.RunAsync(stoppingToken));
     }
 
     private object Attach(ClientConnection connection) =>
-        new GumonjiSession(connection.Kind, accounts, options, (type, body, ct) => connection.SendAsync(type, body, ct));
+        new GumonjiSession(connection.Kind, accounts, options, (type, body, ct) => connection.SendAsync(type, body, ct),
+            world, _ => connection.RequestCloseAsync().AsTask());
 
     private async Task OnPacket(ClientConnection connection, PacketType type, ReadOnlyMemory<byte> body, CancellationToken ct)
     {
@@ -101,7 +108,11 @@ public sealed class GumonjiHost(
         var previous = session.State;
         session.SilentNoReply = false;
         var sent = session.SentCount;
-        var known = await dispatcher.DispatchAsync(session.Kind, type, body, session, ct);
+        var known = false;
+        if (session.Kind == ServerKind.Zone)
+            await world.SerializeAsync(async () => known = await dispatcher.DispatchAsync(session.Kind, type, body, session, ct), ct);
+        else
+            known = await dispatcher.DispatchAsync(session.Kind, type, body, session, ct);
         if (session.State != previous)
             logger.LogInformation("{Label} STATE {Previous} -> {State}", connection.Label, previous, session.State);
         if (!known || (session.SentCount == sent && !session.SilentNoReply))

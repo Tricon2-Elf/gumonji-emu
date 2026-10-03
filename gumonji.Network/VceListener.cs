@@ -34,6 +34,13 @@ public sealed class ClientConnection : IAsyncDisposable
     public string Label { get; }
     public ServerKind Kind { get; }
     public object? Session { get; set; }
+    private int _closing;
+    public bool IsClosing => Volatile.Read(ref _closing) != 0;
+    public ValueTask RequestCloseAsync()
+    {
+        Interlocked.Exchange(ref _closing, 1);
+        return _stream.DisposeAsync();
+    }
 
     public Task SendAsync(PacketType type, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
         SendCoreAsync((uint)type, PacketTypeInfo.Name(Kind, type), body, ct);
@@ -87,6 +94,7 @@ public sealed class VceListener
     private readonly Func<ClientConnection, object> _attachSession;
     private readonly Func<ClientConnection, PacketType, ReadOnlyMemory<byte>, CancellationToken, Task> _onPacket;
     private readonly Action<ClientConnection>? _onDisconnect;
+    private readonly Func<ClientConnection, Task>? _onDisconnectAsync;
 
     public VceListener(
         ILogger logger,
@@ -95,7 +103,8 @@ public sealed class VceListener
         System.Net.IPEndPoint endPoint,
         Func<ClientConnection, object> attachSession,
         Func<ClientConnection, PacketType, ReadOnlyMemory<byte>, CancellationToken, Task> onPacket,
-        Action<ClientConnection>? onDisconnect = null)
+        Action<ClientConnection>? onDisconnect = null,
+        Func<ClientConnection, Task>? onDisconnectAsync = null)
     {
         _logger = logger;
         _name = name;
@@ -104,11 +113,13 @@ public sealed class VceListener
         _attachSession = attachSession;
         _onPacket = onPacket;
         _onDisconnect = onDisconnect;
+        _onDisconnectAsync = onDisconnectAsync;
     }
 
     public async Task RunAsync(CancellationToken ct)
     {
         var listener = new TcpListener(_endPoint);
+        var clients = new List<Task>();
         listener.Start();
         _logger.LogInformation(
             "listening for {Name} on {Address}:{Port} (legacy VCE DH)",
@@ -120,7 +131,8 @@ public sealed class VceListener
             while (!ct.IsCancellationRequested)
             {
                 var tcp = await listener.AcceptTcpClientAsync(ct);
-                _ = Task.Run(() => RunClientAsync(tcp, ct), ct);
+                clients.RemoveAll(task => task.IsCompletedSuccessfully);
+                clients.Add(RunClientAsync(tcp, ct));
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -129,6 +141,8 @@ public sealed class VceListener
         finally
         {
             listener.Stop();
+            // Shutdown is complete only after each connection has saved/released its session.
+            await Task.WhenAll(clients);
         }
     }
 
@@ -152,11 +166,12 @@ public sealed class VceListener
             stage = "encrypted application records";
             var frames = new InnerFrames();
             var width = PacketTypeInfo.OpcodeWidth(_kind);
-            while (!ct.IsCancellationRequested)
+            while (!ct.IsCancellationRequested && !connection.IsClosing)
             {
                 var chunk = await VceRecords.ReadAsync(stream, cipher, connection.Kind == ServerKind.Zone, ct);
                 foreach (var frame in frames.Feed(chunk))
                 {
+                    if (connection.IsClosing) break;
                     if (frame.Length < width)
                         throw new InvalidDataException("missing opcode");
                     var opcode = width == 2
@@ -187,8 +202,16 @@ public sealed class VceListener
         {
             if (connection is not null)
             {
-                _onDisconnect?.Invoke(connection);
-                await connection.DisposeAsync();
+                try
+                {
+                    _onDisconnect?.Invoke(connection);
+                    if (_onDisconnectAsync is not null) await _onDisconnectAsync(connection);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "{Label} disconnect cleanup failed", label);
+                }
+                finally { await connection.DisposeAsync(); }
             }
             tcp.Dispose();
         }
