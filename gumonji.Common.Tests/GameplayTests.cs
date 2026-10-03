@@ -1,4 +1,3 @@
-using gumonji.Common.Accounts;
 using gumonji.Common.DAL;
 using gumonji.Common.DAL.Entities;
 using gumonji.Common.DAL.Repositories;
@@ -23,7 +22,7 @@ public sealed class GameplayTests
         var uid = await fixture.CreatePlayer();
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
         var sent = new List<(PacketType Type, byte[] Body)>();
-        var session = new GumonjiSession(ServerKind.Femsg, fixture.Accounts, new(), (type, body, _) =>
+        var session = new GumonjiSession(ServerKind.Femsg, fixture.Accounts, fixture.Characters, fixture.LoginTokens, fixture.Repository, new(), (type, body, _) =>
         {
             sent.Add((type, body));
             return Task.CompletedTask;
@@ -41,10 +40,13 @@ public sealed class GameplayTests
         await using (var db = fixture.CreateDbContext())
             Assert.Single(await db.TutorialCompletions.ToListAsync());
 
-        var reopened = new LocalAccounts(new AccountRepository(fixture), new CharacterRepository(fixture),
-            new LoginTokenRepository(fixture), new GameplayRepository(fixture));
+        var reopenedAccounts = new AccountRepository(fixture);
+        var reopenedCharacters = new CharacterRepository(fixture);
+        var reopenedTokens = new LoginTokenRepository(fixture);
+        var reopenedGameplay = new GameplayRepository(fixture);
         sent.Clear();
-        var loginSession = new GumonjiSession(ServerKind.Femsg, reopened, new(), (type, body, _) =>
+        var loginSession = new GumonjiSession(ServerKind.Femsg, reopenedAccounts, reopenedCharacters,
+            reopenedTokens, reopenedGameplay, new(), (type, body, _) =>
         {
             sent.Add((type, body));
             return Task.CompletedTask;
@@ -84,13 +86,15 @@ public sealed class GameplayTests
     {
         using var fixture = new DatabaseFixture();
         var uid = await fixture.CreatePlayer();
-        var saved = await fixture.Accounts.GetCharacterAsync(uid);
-        var reopenedAccounts = new LocalAccounts(new AccountRepository(fixture),
-            new CharacterRepository(fixture), new LoginTokenRepository(fixture),
-            new GameplayRepository(fixture));
-        Assert.Equal(uid, await reopenedAccounts.LoginAsync("alice"u8.ToArray(), "password"u8.ToArray()));
+        var saved = await fixture.Characters.GetByUserIdAsync(uid);
+        var reopenedAccounts = new AccountRepository(fixture);
+        var reopenedCharacters = new CharacterRepository(fixture);
+        var reopenedTokens = new LoginTokenRepository(fixture);
+        var reopenedGameplay = new GameplayRepository(fixture);
+        Assert.Equal(uid, await reopenedAccounts.GetOrCreateAsync("alice"u8.ToArray(), "password"u8.ToArray()));
         var sent = new List<(PacketType Type, byte[] Body)>();
-        var session = new GumonjiSession(ServerKind.Zone, reopenedAccounts, new(), (type, body, _) =>
+        var session = new GumonjiSession(ServerKind.Zone, reopenedAccounts, reopenedCharacters,
+            reopenedTokens, reopenedGameplay, new(), (type, body, _) =>
         {
             sent.Add((type, body));
             return Task.CompletedTask;
@@ -115,7 +119,7 @@ public sealed class GameplayTests
         Assert.Equal(0u, reader.ReadUInt32());
         Assert.Equal((uint)saved.Id, reader.ReadUInt32());
         reader.ExpectEnd();
-        Assert.Equal("Alice"u8.ToArray(), (await reopenedAccounts.GetCharacterAsync(uid))!.Name);
+        Assert.Equal("Alice"u8.ToArray(), (await reopenedCharacters.GetByUserIdAsync(uid))!.Name);
     }
 
     [Fact]
@@ -441,7 +445,7 @@ public sealed class GameplayTests
     public async Task NewRequestsRequireEnteredAuthenticatedCharacter()
     {
         using var fixture = new DatabaseFixture();
-        var session = new GumonjiSession(ServerKind.Zone, fixture.Accounts, new(), (_, _, _) => Task.CompletedTask);
+        var session = new GumonjiSession(ServerKind.Zone, fixture.Accounts, fixture.Characters, fixture.LoginTokens, fixture.Repository, new(), (_, _, _) => Task.CompletedTask);
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
         await Assert.ThrowsAsync<InvalidDataException>(() => dispatcher.DispatchAsync(ServerKind.Zone,
             PacketType.CharacterConditionRequest, ReadOnlyMemory<byte>.Empty, session));
@@ -477,7 +481,7 @@ public sealed class GameplayTests
         await using var db = fixture.CreateDbContext();
         await db.GetService<IMigrator>().MigrateAsync("20260930040016_PlantedSeeds");
         var uid = await fixture.CreatePlayer();
-        var character = await fixture.Accounts.GetCharacterAsync(uid);
+        var character = await fixture.Characters.GetByUserIdAsync(uid);
         await db.Database.ExecuteSqlRawAsync("""
             INSERT INTO PlantStates (ZoneId, PlantId, Fertility, Stage) VALUES (1, 1000, 35800, 0);
             """);
@@ -605,7 +609,9 @@ public sealed class GameplayTests
     {
         private readonly string _path = Path.Combine(Path.GetTempPath(), $"gumonji-gameplay-test-{Guid.NewGuid():N}.db");
         private readonly DbContextOptions<MainContext> _options;
-        public LocalAccounts Accounts { get; }
+        public IAccountRepository Accounts { get; }
+        public ICharacterRepository Characters { get; }
+        public ILoginTokenRepository LoginTokens { get; }
         public GameplayRepository Repository { get; }
 
         public DatabaseFixture(bool migrate = true)
@@ -614,22 +620,24 @@ public sealed class GameplayTests
             using var db = CreateDbContext();
             if (migrate) db.Database.Migrate();
             Repository = new(this);
-            Accounts = new(new AccountRepository(this), new CharacterRepository(this), new LoginTokenRepository(this), Repository);
+            Accounts = new AccountRepository(this);
+            Characters = new CharacterRepository(this);
+            LoginTokens = new LoginTokenRepository(this);
         }
 
         public MainContext CreateDbContext() => new(_options);
 
         public async Task<uint> CreatePlayer()
         {
-            var uid = await Accounts.LoginAsync("alice"u8.ToArray(), "password"u8.ToArray());
-            await Accounts.SaveCharacterAsync(uid, new Character { Name = "Alice"u8.ToArray() });
+            var uid = await Accounts.GetOrCreateAsync("alice"u8.ToArray(), "password"u8.ToArray());
+            await Characters.SaveAsync(uid, new Character { Name = "Alice"u8.ToArray() });
             return uid;
         }
 
         public async Task<GumonjiSession> Session(uint uid, List<(PacketType Type, byte[] Body)> sent)
         {
-            var character = await Accounts.GetCharacterAsync(uid);
-            var session = new GumonjiSession(ServerKind.Zone, Accounts, new(), (type, body, _) =>
+            var character = await Characters.GetByUserIdAsync(uid);
+            var session = new GumonjiSession(ServerKind.Zone, Accounts, Characters, LoginTokens, Repository, new(), (type, body, _) =>
             {
                 sent.Add((type, body));
                 return Task.CompletedTask;

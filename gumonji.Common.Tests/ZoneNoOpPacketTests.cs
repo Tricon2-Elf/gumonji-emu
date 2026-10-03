@@ -1,4 +1,3 @@
-using gumonji.Common.Accounts;
 using gumonji.Network;
 using gumonji.Network.Packets.Zone;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -63,7 +62,9 @@ public sealed class ZoneNoOpPacketTests
     public async Task RegisteredOnlyForZoneAndSilentEvenBeforeLogin(PacketType opcode, string hex)
     {
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
-        var session = new GumonjiSession(ServerKind.Zone, new LocalAccounts(), new(), (_, _, _) =>
+        using var database = new TestDatabaseFixture();
+        var session = new GumonjiSession(ServerKind.Zone, database.Accounts, database.Characters,
+            database.LoginTokens, database.Gameplay, new(), (_, _, _) =>
             throw new Xunit.Sdk.XunitException("ignored packet sent a response"));
         var payload = Convert.FromHexString(hex);
         Assert.False(await dispatcher.DispatchAsync(ServerKind.Femsg, opcode, payload, session));

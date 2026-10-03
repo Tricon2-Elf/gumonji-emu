@@ -14,7 +14,7 @@ public sealed class PlantHarvestHandler : PacketHandlerBase<PlantHarvestRequest>
         session.EnsureZonePacket(RequestType);
         if (session.State != SessionState.ZoneEntered || session.CharacterId is null)
             throw new InvalidDataException("harvest before zone entry");
-        var result = await session.Accounts.Gameplay.HarvestAsync(session.UserId!.Value, session.Options.HomeZone,
+        var result = await session.Gameplay.HarvestAsync(session.UserId!.Value, session.Options.HomeZone,
             request.PlantId, session.PositionX, session.PositionY, ct);
         if (result.Item is not null)
             await session.SendAsync(InventoryPacket(result.Item), ct);

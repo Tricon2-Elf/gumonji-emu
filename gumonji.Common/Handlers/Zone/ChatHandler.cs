@@ -10,7 +10,7 @@ public sealed class ChatHandler : PacketHandlerBase<ChatRequest>
         session.EnsureZonePacket(RequestType);
         session.LastChat = new ChatState(request.Sender, request.Message);
 
-        var character = await session.Accounts.GetCharacterAsync(session.UserId!.Value, ct);
+        var character = await session.Characters.GetByUserIdAsync(session.UserId!.Value, ct);
         var sender = character?.Name ?? request.Sender;
         if (sender.Length > 32)
             sender = sender[..32];

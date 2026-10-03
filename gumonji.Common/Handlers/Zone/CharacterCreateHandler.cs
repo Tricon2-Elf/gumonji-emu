@@ -1,4 +1,3 @@
-using gumonji.Common.Accounts;
 
 namespace gumonji.Common.Handlers.Zone;
 
@@ -11,7 +10,7 @@ public sealed class CharacterCreateHandler : PacketHandlerBase<CharacterCreateRe
     {
         if (session.UserId is null)
             throw new InvalidDataException("CHARACTER_CREATE before game authentication");
-        await session.Accounts.SaveCharacterAsync(
+        await session.Characters.SaveAsync(
             session.UserId.Value,
             new DAL.Entities.Character
             {
@@ -22,7 +21,7 @@ public sealed class CharacterCreateHandler : PacketHandlerBase<CharacterCreateRe
                 Color = (int)request.Color,
             },
             ct);
-        var character = await session.Accounts.GetCharacterAsync(session.UserId.Value, ct)
+        var character = await session.Characters.GetByUserIdAsync(session.UserId.Value, ct)
             ?? throw new InvalidDataException("CHARACTER_CREATE was not persisted");
         var entityId = session.AssignCharacter(character.Id);
         session.State = SessionState.CharacterCreated;

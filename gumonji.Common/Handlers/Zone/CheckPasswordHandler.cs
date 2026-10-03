@@ -9,7 +9,7 @@ public sealed class CheckPasswordHandler : PacketHandlerBase<CheckPasswordReques
     {
         if (session.UserId is not null)
             throw new InvalidDataException("duplicate CHECK_PASSWORD on authenticated connection");
-        if (!await session.Accounts.ConsumeAsync(request.UserId, request.Token, ct))
+        if (!await session.LoginTokens.ConsumeAsync(request.UserId, request.Token, ct))
             throw new InvalidDataException($"CHECK_PASSWORD rejected uid={request.UserId}: invalid/expired/used token");
         session.UserId = request.UserId;
         session.State = SessionState.WaitCharacterCheck;

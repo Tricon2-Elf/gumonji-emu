@@ -13,11 +13,11 @@ public sealed class ItemUseHandler : PacketHandlerBase<ItemUseRequest>
         session.EnsureZonePacket(RequestType);
         if (session.State != SessionState.ZoneEntered || session.CharacterId is null || session.UserId is null)
             throw new InvalidDataException("item use before zone entry");
-        var item = (await session.Accounts.Gameplay.GetInventoryAsync(session.UserId.Value, ct))
+        var item = (await session.Gameplay.GetInventoryAsync(session.UserId.Value, ct))
             .SingleOrDefault(i => i.Slot == request.Slot);
         if (item is { ItemType: TreeSeeds.ItemType } && TreeSeeds.IsSupported(item.Subtype, item.Color))
         {
-            var result = await session.Accounts.Gameplay.PlantSeedAsync(session.UserId.Value,
+            var result = await session.Gameplay.PlantSeedAsync(session.UserId.Value,
                 session.Options.HomeZone, request.Slot, request.X, request.Y,
                 session.PositionX, session.PositionY, ct);
             await session.SendAsync(new ItemUseResponse(request.Slot, result.Plant is not null), ct);
@@ -41,7 +41,7 @@ public sealed class ItemUseHandler : PacketHandlerBase<ItemUseRequest>
 
         session.EquippedVehicleId = session.EquippedVehicleId == (uint)item.Id ? null : (uint)item.Id;
         await session.SendAsync(new ItemUseResponse(request.Slot, true), ct);
-        var character = await session.Accounts.GetCharacterAsync(session.UserId.Value, ct)
+        var character = await session.Characters.GetByUserIdAsync(session.UserId.Value, ct)
             ?? throw new InvalidDataException("item use without a saved character");
         await session.SendAsync(new CharacterAvatarResponse(session.CharacterId.Value, character.Name,
             character.Body, character.Model, character.Style, character.Color,

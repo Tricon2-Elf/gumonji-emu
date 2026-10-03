@@ -1,5 +1,6 @@
 using gumonji.Network;
 using gumonji.Common.World;
+using gumonji.Common.DAL.Repositories;
 
 namespace gumonji.Common;
 
@@ -45,7 +46,10 @@ public sealed class GumonjiSession
 
     public GumonjiSession(
         ServerKind kind,
-        Accounts.LocalAccounts accounts,
+        IAccountRepository accounts,
+        ICharacterRepository characters,
+        ILoginTokenRepository loginTokens,
+        IGameplayRepository gameplay,
         EmuOptions options,
         Func<PacketType, byte[], CancellationToken, Task> send,
         ZoneRuntime? zone = null,
@@ -53,6 +57,9 @@ public sealed class GumonjiSession
     {
         Kind = kind;
         Accounts = accounts;
+        Characters = characters;
+        LoginTokens = loginTokens;
+        Gameplay = gameplay;
         Options = options;
         _send = send;
         Zone = zone ?? new ZoneRuntime();
@@ -65,7 +72,10 @@ public sealed class GumonjiSession
     private readonly Func<CancellationToken, Task>? _close;
     private readonly SemaphoreSlim _disconnect = new(1, 1);
     private bool _disconnected;
-    public Accounts.LocalAccounts Accounts { get; }
+    public IAccountRepository Accounts { get; }
+    public ICharacterRepository Characters { get; }
+    public ILoginTokenRepository LoginTokens { get; }
+    public IGameplayRepository Gameplay { get; }
     public EmuOptions Options { get; }
     public uint? UserId { get; set; }
     public uint? CharacterId { get; set; }
@@ -113,7 +123,7 @@ public sealed class GumonjiSession
             var delta = total - _savedPlaySeconds;
             if (delta == 0 && walking == 0 && swimming == 0)
                 return;
-            await Accounts.Gameplay.AddConditionAsync(UserId.Value, walking, swimming, delta, ct);
+            await Gameplay.AddConditionAsync(UserId.Value, walking, swimming, delta, ct);
             _savedPlaySeconds = total;
         }
         finally { _conditionSave.Release(); }

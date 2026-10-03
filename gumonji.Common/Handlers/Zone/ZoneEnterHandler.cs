@@ -1,4 +1,3 @@
-using gumonji.Common.Accounts;
 
 namespace gumonji.Common.Handlers.Zone;
 
@@ -11,7 +10,7 @@ public sealed class ZoneEnterHandler : PacketHandlerBase<ZoneEnterRequest>
     {
         session.EnsureZonePacket(RequestType);
         var userId = session.UserId!.Value;
-        var character = await session.Accounts.GetCharacterAsync(userId, ct)
+        var character = await session.Characters.GetByUserIdAsync(userId, ct)
             ?? new DAL.Entities.Character { Name = "Local Player"u8.ToArray() };
         var characterId = session.CharacterId ?? checked((uint)character.Id);
         if (characterId == 0)
@@ -32,8 +31,8 @@ public sealed class ZoneEnterHandler : PacketHandlerBase<ZoneEnterRequest>
             new CharacterAvatarResponse(characterId, character.Name, character.Body, character.Model, character.Style, character.Color),
             ct);
         if (character.Id != 0)
-            await session.Accounts.Gameplay.EnsureStarterVehicleAsync(userId, ct);
-        foreach (var item in await session.Accounts.Gameplay.GetInventoryAsync(userId, ct))
+            await session.Gameplay.EnsureStarterVehicleAsync(userId, ct);
+        foreach (var item in await session.Gameplay.GetInventoryAsync(userId, ct))
             await session.SendAsync(PlantHarvestHandler.InventoryPacket(item), ct);
     }
 }

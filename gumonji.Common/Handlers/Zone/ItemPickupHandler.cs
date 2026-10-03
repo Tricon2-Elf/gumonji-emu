@@ -23,7 +23,7 @@ public sealed class ItemPickupHandler : PacketHandlerBase<ItemPickupRequest>
             return;
         }
 
-        var vehicle = await session.Accounts.Gameplay.EnsureStarterVehicleAsync(session.UserId.Value, ct);
+        var vehicle = await session.Gameplay.EnsureStarterVehicleAsync(session.UserId.Value, ct);
         if (vehicle is null)
         {
             await session.SendAsync(new ItemPickupResponse(request.ItemId, false), ct);
@@ -35,7 +35,7 @@ public sealed class ItemPickupHandler : PacketHandlerBase<ItemPickupRequest>
         await session.SendAsync(new ItemPickupResponse(request.ItemId, true), ct);
         await session.SendAsync(new ItemRemoveResponse(request.ItemId), ct);
         await session.SendAsync(PlantHarvestHandler.InventoryPacket(vehicle), ct);
-        var character = await session.Accounts.GetCharacterAsync(session.UserId.Value, ct)
+        var character = await session.Characters.GetByUserIdAsync(session.UserId.Value, ct)
             ?? throw new InvalidDataException("item pickup without a saved character");
         await session.SendAsync(new CharacterAvatarResponse(session.CharacterId.Value, character.Name,
             character.Body, character.Model, character.Style, character.Color,

@@ -1,4 +1,3 @@
-using gumonji.Common.Accounts;
 using gumonji.Common.DAL;
 using gumonji.Common.DAL.Entities;
 using gumonji.Common.DAL.Repositories;
@@ -150,7 +149,7 @@ public sealed class ZoneSessionPacketTests
     {
         using var db = new Database();
         var player = await db.Player(new ZoneRuntime(), "driver", 0, 0);
-        var item = await db.Accounts.Gameplay.EnsureStarterVehicleAsync(player.Session.UserId!.Value);
+        var item = await db.Gameplay.EnsureStarterVehicleAsync(player.Session.UserId!.Value);
         player.Session.EquippedVehicleId = (uint)item!.Id;
         await Dispatch(player, PacketType.TakeoffRequest, []);
         Assert.Empty(player.Sent);
@@ -160,7 +159,7 @@ public sealed class ZoneSessionPacketTests
         Assert.Equal(PacketType.RenderTaskResponse, Assert.Single(player.Sent).Type);
         Assert.Equal(new RenderTaskResponse(player.Session.UserId.Value, 1, 16, 7, 0,
             [new((byte)item.Slot, (ushort)item.ItemType, (byte)item.Subtype, (byte)item.Color)]).ToBytes(), player.Sent[0].Body);
-        var unauthenticated = new GumonjiSession(ServerKind.Zone, db.Accounts, new(), (_, _, _) => Task.CompletedTask);
+        var unauthenticated = new GumonjiSession(ServerKind.Zone, db.Accounts, db.Characters, db.LoginTokens, db.Gameplay, new(), (_, _, _) => Task.CompletedTask);
         await Dispatcher.DispatchAsync(ServerKind.Zone, PacketType.TakeoffRequest, ReadOnlyMemory<byte>.Empty, unauthenticated);
         await Assert.ThrowsAsync<InvalidDataException>(() => Dispatcher.DispatchAsync(ServerKind.Zone,
             PacketType.RenderTaskRequest, ReadOnlyMemory<byte>.Empty, unauthenticated));
@@ -211,7 +210,7 @@ public sealed class ZoneSessionPacketTests
         Assert.Equal(SessionState.Disconnected, player.Session.State);
         Assert.Equal(0, world.SessionCount);
         Assert.Null(world.Find(player.Session.CharacterId!.Value));
-        Assert.Equal(42, (await db.Accounts.GetCharacterAsync(player.Session.UserId!.Value))!.PlayedSeconds);
+        Assert.Equal(42, (await db.Characters.GetByUserIdAsync(player.Session.UserId!.Value))!.PlayedSeconds);
         await Dispatch(player, PacketType.LogoutRequest, []);
         Assert.Equal(1, closed);
         Assert.Empty(player.Sent);
@@ -243,7 +242,7 @@ public sealed class ZoneSessionPacketTests
         var world = new ZoneRuntime();
         var player = await db.Player(world, "returning", 0, 0);
         var id = player.Session.CharacterId!.Value;
-        var databaseId = (await db.Accounts.GetCharacterAsync(player.Session.UserId!.Value))!.Id;
+        var databaseId = (await db.Characters.GetByUserIdAsync(player.Session.UserId!.Value))!.Id;
         await player.Session.DisconnectAsync();
         var itemId = world.Register(ZoneEntityKind.Item, 9999, 1, 2, id);
         Assert.NotEqual(id, itemId);
@@ -262,7 +261,7 @@ public sealed class ZoneSessionPacketTests
         sender.Session.PlantedChunks.Add((2, 2));
         observer.Session.PlantedChunks.Add((2, 2));
         distant.Session.PlantedChunks.Add((0, 0));
-        var broken = new GumonjiSession(ServerKind.Zone, db.Accounts, new(), (_, _, _) => throw new IOException("closed"), world)
+        var broken = new GumonjiSession(ServerKind.Zone, db.Accounts, db.Characters, db.LoginTokens, db.Gameplay, new(), (_, _, _) => throw new IOException("closed"), world)
             { State = SessionState.ZoneEntered };
         broken.PlantedChunks.Add((2, 2)); world.Attach(broken);
         var committed = 0;
@@ -302,24 +301,30 @@ public sealed class ZoneSessionPacketTests
     {
         private readonly string _path = Path.Combine(Path.GetTempPath(), $"gumonji-session-test-{Guid.NewGuid():N}.db");
         private readonly DbContextOptions<MainContext> _options;
-        public LocalAccounts Accounts { get; }
+        public IAccountRepository Accounts { get; }
+        public ICharacterRepository Characters { get; }
+        public ILoginTokenRepository LoginTokens { get; }
+        public IGameplayRepository Gameplay { get; }
         public Database()
         {
             _options = new DbContextOptionsBuilder<MainContext>().UseSqlite($"Data Source={_path};Pooling=False").Options;
             using var db = CreateDbContext(); db.Database.Migrate();
-            Accounts = new(new AccountRepository(this), new CharacterRepository(this), new LoginTokenRepository(this), new GameplayRepository(this));
+            Accounts = new AccountRepository(this);
+            Characters = new CharacterRepository(this);
+            LoginTokens = new LoginTokenRepository(this);
+            Gameplay = new GameplayRepository(this);
         }
         public MainContext CreateDbContext() => new(_options);
         public async Task<Player> Player(ZoneRuntime world, string name, uint x, uint y, Func<Task>? close = null)
         {
             var bytes = System.Text.Encoding.ASCII.GetBytes(name);
-            var uid = await Accounts.LoginAsync(bytes, "password"u8.ToArray());
-            await Accounts.SaveCharacterAsync(uid, new Character { Name = bytes, Body = 1, Model = 16, Style = 7 });
+            var uid = await Accounts.GetOrCreateAsync(bytes, "password"u8.ToArray());
+            await Characters.SaveAsync(uid, new Character { Name = bytes, Body = 1, Model = 16, Style = 7 });
             var sent = new List<(PacketType Type, byte[] Body)>();
-            var session = new GumonjiSession(ServerKind.Zone, Accounts, new(), (type, body, _) =>
+            var session = new GumonjiSession(ServerKind.Zone, Accounts, Characters, LoginTokens, Gameplay, new(), (type, body, _) =>
             { sent.Add((type, body)); return Task.CompletedTask; }, world, _ => close?.Invoke() ?? Task.CompletedTask)
             { UserId = uid, State = SessionState.ZoneEntered, PositionX = x, PositionY = y };
-            session.AssignCharacter((await Accounts.GetCharacterAsync(uid))!.Id);
+            session.AssignCharacter((await Characters.GetByUserIdAsync(uid))!.Id);
             return new(session, sent);
         }
         public void Dispose() { File.Delete(_path); File.Delete(_path + "-wal"); File.Delete(_path + "-shm"); }

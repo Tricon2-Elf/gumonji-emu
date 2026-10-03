@@ -9,7 +9,7 @@ public sealed class CharacterConditionHandler : PacketHandlerBase<CharacterCondi
     {
         session.EnsureZonePacket(RequestType);
         await session.SaveConditionAsync(ct: ct);
-        var character = await session.Accounts.GetCharacterAsync(session.UserId!.Value, ct)
+        var character = await session.Characters.GetByUserIdAsync(session.UserId!.Value, ct)
             ?? throw new InvalidDataException("condition requested without a saved character");
         await session.SendAsync(new CharacterConditionResponse(character.Name, WireTotal(character.PlayedSeconds),
             WireTotal(character.WalkingDistance), WireTotal(character.SwimmingDistance)), ct);

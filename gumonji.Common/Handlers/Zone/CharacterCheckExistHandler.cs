@@ -9,7 +9,7 @@ public sealed class CharacterCheckExistHandler : IPacketHandler
     {
         if (session.UserId is null || session.State != SessionState.WaitCharacterCheck || payload.Length != 0)
             throw new InvalidDataException("invalid or unauthenticated CHARACTER_CHECK_EXIST");
-        var exists = await session.Accounts.GetCharacterAsync(session.UserId.Value, ct) is not null;
+        var exists = await session.Characters.GetByUserIdAsync(session.UserId.Value, ct) is not null;
         session.State = exists ? SessionState.WaitCharacterLoad : SessionState.CharacterCreationMenu;
         await session.SendAsync(new CharacterCheckExistResponse(exists), ct);
     }

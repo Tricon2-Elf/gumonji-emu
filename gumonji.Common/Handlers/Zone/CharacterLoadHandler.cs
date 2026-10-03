@@ -10,7 +10,7 @@ public sealed class CharacterLoadHandler : PacketHandlerBase<CharacterLoadReques
         if (session.UserId is null || session.State != SessionState.WaitCharacterLoad)
             throw new InvalidDataException("CHARACTER_LOAD before a saved character was offered");
 
-        var character = await session.Accounts.GetCharacterAsync(session.UserId.Value, ct);
+        var character = await session.Characters.GetByUserIdAsync(session.UserId.Value, ct);
         if (character is null)
             throw new InvalidDataException("CHARACTER_LOAD requested without a saved character");
 

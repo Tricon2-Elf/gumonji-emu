@@ -1,6 +1,5 @@
 using System.Net;
 using gumonji.Common;
-using gumonji.Common.Accounts;
 using gumonji.Common.DAL;
 using gumonji.Common.DAL.Repositories;
 using gumonji.Common.World;
@@ -37,7 +36,6 @@ public static class Program
         builder.Services.AddSingleton<ICharacterRepository, CharacterRepository>();
         builder.Services.AddSingleton<ILoginTokenRepository, LoginTokenRepository>();
         builder.Services.AddSingleton<IGameplayRepository, GameplayRepository>();
-        builder.Services.AddSingleton<LocalAccounts>();
         builder.Services.AddSingleton(sp => new ZoneRuntime(audit: message =>
             sp.GetRequiredService<ILogger<ZoneRuntime>>().LogInformation("{Audit}", message)));
         builder.Services.AddSingleton(sp => PacketDispatcher.CreateDefault(sp.GetRequiredService<ILogger<PacketDispatcher>>()));
@@ -72,7 +70,10 @@ public static class Program
 
 public sealed class GumonjiHost(
     EmuOptions options,
-    LocalAccounts accounts,
+    IAccountRepository accounts,
+    ICharacterRepository characters,
+    ILoginTokenRepository loginTokens,
+    IGameplayRepository gameplay,
     PacketDispatcher dispatcher,
     ZoneRuntime world,
     ILogger<GumonjiHost> logger) : BackgroundService
@@ -99,7 +100,8 @@ public sealed class GumonjiHost(
     }
 
     private object Attach(ClientConnection connection) =>
-        new GumonjiSession(connection.Kind, accounts, options, (type, body, ct) => connection.SendAsync(type, body, ct),
+        new GumonjiSession(connection.Kind, accounts, characters, loginTokens, gameplay,
+            options, (type, body, ct) => connection.SendAsync(type, body, ct),
             world, _ => connection.RequestCloseAsync().AsTask());
 
     private async Task OnPacket(ClientConnection connection, PacketType type, ReadOnlyMemory<byte> body, CancellationToken ct)

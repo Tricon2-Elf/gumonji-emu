@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Numerics;
 using gumonji.Common;
-using gumonji.Common.Accounts;
 using gumonji.Network;
 using gumonji.Network.Crypto;
 using gumonji.Network.Packets.Femsg;
@@ -71,11 +70,11 @@ public class ProtocolTests
     [Fact]
     public async Task AuthHandoffCharacterAndZoneMatchPython()
     {
-        var accounts = new LocalAccounts();
+        using var database = new TestDatabaseFixture();
         var options = new EmuOptions { ZonePort = 50000, AdvertiseIp = "127.0.0.1" };
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
         var sent = new List<byte[]>();
-        var front = Session(ServerKind.Femsg, accounts, options, sent);
+        var front = Session(ServerKind.Femsg, database, options, sent);
         var auth = Assert.Single(await Receive(dispatcher, front, sent, "0065047573657206736563726574"));
         Assert.Equal("00660000000000000001", Convert.ToHexString(auth[..10]).ToLowerInvariant());
         var reader = new PacketReader(auth.AsSpan(10));
@@ -98,7 +97,7 @@ public class ProtocolTests
         check.Write((uint)PacketType.CheckPasswordRequest);
         check.Write(1u);
         check.WriteCompactBytes(token[..^1]);
-        var game = Session(ServerKind.Zone, accounts, options, sent);
+        var game = Session(ServerKind.Zone, database, options, sent);
         var accepted = Assert.Single(await Receive(dispatcher, game, sent, Convert.ToHexString(check.ToBytes())));
         Assert.Equal("000000dc0000000000010080008000000001", Convert.ToHexString(accepted).ToLowerInvariant());
 
@@ -191,7 +190,7 @@ public class ProtocolTests
         Assert.True(game.SilentNoReply);
         Assert.True(game.IsTypingInChat);
 
-        var notice = Session(ServerKind.Femsg, accounts, options, sent);
+        var notice = Session(ServerKind.Femsg, database, options, sent);
         notice.UserId = 1;
         notice.State = SessionState.HandoffIssued;
         var members = Assert.Single(await Receive(dispatcher, notice, sent, "0198"));
@@ -206,18 +205,18 @@ public class ProtocolTests
         Assert.Equal(0u, notice.LastFrontendAnimationId);
         Assert.Throws<InvalidDataException>(() => AvatarAnimationNotice.FromBytes([0, 0, 0]));
 
-        var character = await accounts.GetCharacterAsync(1);
+        var character = await database.Characters.GetByUserIdAsync(1);
         Assert.NotNull(character);
         Assert.Equal("Local Player"u8.ToArray(), character!.Name);
         Assert.Equal((0, 10, 4, 0x50), (character.Body, character.Model, character.Style, character.Color));
 
-        var profile = Session(ServerKind.Femsg, accounts, options, sent);
+        var profile = Session(ServerKind.Femsg, database, options, sent);
         profile.UserId = 1;
         profile.State = SessionState.WaitZoneRequest;
         Assert.Empty(await Receive(dispatcher, profile, sent, "08fd00000001"));
         Assert.True(profile.SilentNoReply);
 
-        var returning = Session(ServerKind.Zone, accounts, options, sent);
+        var returning = Session(ServerKind.Zone, database, options, sent);
         returning.UserId = 1;
         returning.State = SessionState.WaitCharacterCheck;
         var existing = Assert.Single(await Receive(dispatcher, returning, sent, "000002da"));
@@ -229,16 +228,16 @@ public class ProtocolTests
         Assert.Equal(1u, returning.CharacterId);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => Receive(dispatcher, game, sent, "0000232800"));
-        var replay = Session(ServerKind.Zone, accounts, options, sent);
+        var replay = Session(ServerKind.Zone, database, options, sent);
         await Assert.ThrowsAsync<InvalidDataException>(() => Receive(dispatcher, replay, sent, Convert.ToHexString(check.ToBytes())));
     }
 
     [Fact]
     public async Task FrontendInventoryTemplateSyncAfterAvatarUpdateIsOneWay()
     {
-        var accounts = new LocalAccounts();
+        using var database = new TestDatabaseFixture();
         var sent = new List<byte[]>();
-        var frontend = Session(ServerKind.Femsg, accounts, new EmuOptions(), sent);
+        var frontend = Session(ServerKind.Femsg, database, new EmuOptions(), sent);
         frontend.UserId = 1;
         frontend.State = SessionState.HandoffIssued;
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
@@ -255,7 +254,8 @@ public class ProtocolTests
     public async Task FrontendProgressValueGetsFourByteReply()
     {
         var sent = new List<byte[]>();
-        var frontend = Session(ServerKind.Femsg, new LocalAccounts(), new EmuOptions(), sent);
+        using var database = new TestDatabaseFixture();
+        var frontend = Session(ServerKind.Femsg, database, new EmuOptions(), sent);
         frontend.State = SessionState.HandoffIssued;
         var dispatcher = PacketDispatcher.CreateDefault(NullLogger<PacketDispatcher>.Instance);
         var response = Assert.Single(await Receive(dispatcher, frontend, sent, "013200000064"));
@@ -263,8 +263,9 @@ public class ProtocolTests
         Assert.Throws<InvalidDataException>(() => ProgressValueRequest.FromBytes([0, 0, 0]));
     }
 
-    private static GumonjiSession Session(ServerKind kind, LocalAccounts accounts, EmuOptions options, List<byte[]> sent) =>
-        new(kind, accounts, options, (type, body, _) =>
+    private static GumonjiSession Session(ServerKind kind, TestDatabaseFixture database, EmuOptions options, List<byte[]> sent) =>
+        new(kind, database.Accounts, database.Characters, database.LoginTokens, database.Gameplay,
+            options, (type, body, _) =>
         {
             sent.Add(Frame(type, body));
             return Task.CompletedTask;

@@ -16,7 +16,7 @@ public sealed class GetPageDataHandler : IPacketHandler
         await session.SendAsync(TerrainWorld.CreatePage(request.ChunkX, request.ChunkY), ct);
         if (!session.PlantedChunks.Add((request.ChunkX, request.ChunkY)))
             return;
-        var savedPlants = await session.Accounts.Gameplay.GetPlantsInChunkAsync(
+        var savedPlants = await session.Gameplay.GetPlantsInChunkAsync(
             session.Options.HomeZone, request.ChunkX, request.ChunkY, ct);
         foreach (var plant in savedPlants)
             await session.SendAsync(new PlantPlaceResponse(
