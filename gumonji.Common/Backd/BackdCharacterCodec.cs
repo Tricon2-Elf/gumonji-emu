@@ -5,7 +5,7 @@ using gumonji.Common.DAL.Entities;
 
 namespace gumonji.Common.Backd;
 
-/// <summary>Codec for the original line-oriented character document. No Unicode conversion of user text.</summary>
+/// <summary>Codec for the original line-oriented character document. Item comments use UTF-8.</summary>
 public static class BackdCharacterCodec
 {
     public const int MaximumPayloadLength = 262144;
@@ -56,6 +56,19 @@ public static class BackdCharacterCodec
         Number<BackdCharacterItem, int>("price", x => x.Price, (x, v) => x.Price = v),
     ];
 
+    // Fixed comment positions belong to the protocol, rather than a separate entity collection.
+    private static readonly Field<BackdCharacterItem>[] ItemComments =
+    [
+        Text<BackdCharacterItem>("0", x => x.Comment0, (x, v) => x.Comment0 = v),
+        Text<BackdCharacterItem>("1", x => x.Comment1, (x, v) => x.Comment1 = v),
+        Text<BackdCharacterItem>("2", x => x.Comment2, (x, v) => x.Comment2 = v),
+        Text<BackdCharacterItem>("3", x => x.Comment3, (x, v) => x.Comment3 = v),
+        Text<BackdCharacterItem>("4", x => x.Comment4, (x, v) => x.Comment4 = v),
+        Text<BackdCharacterItem>("5", x => x.Comment5, (x, v) => x.Comment5 = v),
+        Text<BackdCharacterItem>("6", x => x.Comment6, (x, v) => x.Comment6 = v),
+        Text<BackdCharacterItem>("7", x => x.Comment7, (x, v) => x.Comment7 = v),
+    ];
+
     // Nullable fields preserve omitted directives and the original loader's defaulting behavior.
     private static Field<T> Number<T, V>(string name, Func<T, V?> get, Action<T, V> set)
         where V : struct, INumberBase<V> =>
@@ -66,6 +79,11 @@ public static class BackdCharacterCodec
         int maximum, bool escaped, bool remainder = false) =>
         new(name, (x, value) => set(x, Bounded(escaped ? Unescape(value) : value, maximum)),
             x => get(x) is { } value ? WriteBytes(value, maximum, escaped, remainder) : null);
+
+    // UTF-8 replacement fallback is intentional for legacy/invalid sequences.
+    private static Field<T> Text<T>(string name, Func<T, string?> get, Action<T, string> set) =>
+        new(name, (x, value) => set(x, Encoding.UTF8.GetString(Bounded(Unescape(value), 63))),
+            x => get(x) is { } value ? Escape(Bounded(Encoding.UTF8.GetBytes(value), 63)) : null);
 
     private static byte[] WriteBytes(byte[] value, int maximum, bool escaped, bool remainder)
     {
@@ -167,9 +185,7 @@ public static class BackdCharacterCodec
         else if (name == "comment")
         {
             var index = Index(Token(line, 3), 8);
-            item.Comments.RemoveAll(x => x.Index == index);
-            item.Comments.Add(new() { UserId = character.UserId, Slot = slot, Index = index,
-                Text = Bounded(Unescape(Remainder(line, 4)), 63) });
+            ItemComments[index].Read(item, Remainder(line, 4));
         }
         else character.Extensions.Add(new() { UserId = character.UserId,
             Index = character.Extensions.Count, Line = line });
@@ -210,10 +226,10 @@ public static class BackdCharacterCodec
                 Line($"=item {item.Slot} {(parameter.Secret ? "secret_iparam" : "iparam")} {parameter.Index} ",
                     Decimal(parameter.Value));
             }
-            foreach (var comment in item.Comments.OrderBy(x => x.Index))
+            for (var index = 0; index < ItemComments.Length; index++)
             {
-                CheckIndex(comment.Index, 8);
-                Line($"=item {item.Slot} comment {comment.Index} ", Escape(Bounded(comment.Text, 63)));
+                if (ItemComments[index].Write(item) is { } value)
+                    Line($"=item {item.Slot} comment {index} ", value);
             }
             foreach (var field in ItemFields.Skip(2))
                 if (field.Write(item) is { } value) Line($"=item {item.Slot} {field.Name} ", value);

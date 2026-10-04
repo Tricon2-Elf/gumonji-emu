@@ -480,8 +480,10 @@ public sealed class GameplayTests
         using var fixture = new DatabaseFixture(migrate: false);
         await using var db = fixture.CreateDbContext();
         await db.GetService<IMigrator>().MigrateAsync("20260930040016_PlantedSeeds");
-        var uid = await fixture.CreatePlayer();
-        var character = await fixture.Characters.GetByUserIdAsync(uid);
+        // Seed the historical schema directly; current repositories use prefixed tables.
+        await db.Database.ExecuteSqlRawAsync("INSERT INTO Users (Id, Username, PasswordHash) VALUES (1, X'6C6567616379', X'68617368')");
+        await db.Database.ExecuteSqlRawAsync("INSERT INTO Characters (Id, UserId, Name, Body, Model, Style, Color) VALUES (1, 1, X'416C696365', 1, 2, 3, 4)");
+        var character = new Character { Id = 1 };
         await db.Database.ExecuteSqlRawAsync("""
             INSERT INTO PlantStates (ZoneId, PlantId, Fertility, Stage) VALUES (1, 1000, 35800, 0);
             """);

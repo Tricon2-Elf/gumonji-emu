@@ -12,13 +12,13 @@ public static class BackdCharacterDataMigration
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await using var command = db.Database.GetDbConnection().CreateCommand();
         command.Transaction = transaction.GetDbTransaction();
-        command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='BackdCharacterLegacy'";
+        command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='backd.CharacterLegacy'";
         if (Convert.ToInt64(await command.ExecuteScalarAsync(ct)) == 0)
         {
             await transaction.CommitAsync(ct);
             return;
         }
-        command.CommandText = "SELECT UserId, Payload, UpdatedAt FROM BackdCharacterLegacy ORDER BY UserId";
+        command.CommandText = "SELECT UserId, Payload, UpdatedAt FROM \"backd.CharacterLegacy\" ORDER BY UserId";
         await using (var reader = await command.ExecuteReaderAsync(ct))
         {
             while (await reader.ReadAsync(ct))
@@ -38,7 +38,7 @@ public static class BackdCharacterDataMigration
             }
         }
         await db.SaveChangesAsync(ct);
-        command.CommandText = "DROP TABLE BackdCharacterLegacy";
+        command.CommandText = "DROP TABLE \"backd.CharacterLegacy\"";
         await command.ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
     }

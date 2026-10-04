@@ -17,6 +17,18 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        // SQLite uses literal dotted names; these are table prefixes, not schemas.
+        b.Entity<BackdCharacter>().ToTable("backd.Characters");
+        b.Entity<BackdCharacterParameter>().ToTable("backd.CharacterParameters");
+        b.Entity<BackdCharacterEquipment>().ToTable("backd.CharacterEquipment");
+        b.Entity<BackdCharacterExperience>().ToTable("backd.CharacterExperiences");
+        b.Entity<BackdCharacterExtension>().ToTable("backd.CharacterExtensions");
+        b.Entity<BackdCharacterItem>().ToTable("backd.CharacterItems");
+        b.Entity<BackdCharacterItemParameter>().ToTable("backd.CharacterItemParameters");
+        b.Entity<BackdSequence>().ToTable("backd.Sequences");
+        b.Entity<BackdHistory>().ToTable("backd.Histories");
+        b.Entity<InventoryItem>().ToTable("zone.InventoryItems");
+        b.Entity<Plant>().ToTable("zone.Plants");
         b.Entity<BackdCharacter>(e =>
         {
             e.HasKey(x => x.UserId);
@@ -35,10 +47,8 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
         {
             e.HasKey(x => new { x.UserId, x.Slot });
             e.HasMany(x => x.Parameters).WithOne().HasForeignKey(x => new { x.UserId, x.Slot }).OnDelete(DeleteBehavior.Cascade);
-            e.HasMany(x => x.Comments).WithOne().HasForeignKey(x => new { x.UserId, x.Slot }).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<BackdCharacterItemParameter>().HasKey(x => new { x.UserId, x.Slot, x.Secret, x.Index });
-        b.Entity<BackdCharacterItemComment>().HasKey(x => new { x.UserId, x.Slot, x.Index });
         b.Entity<BackdSequence>(e =>
         {
             e.HasKey(x => x.Name);
@@ -84,7 +94,7 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
 
         b.Entity<Character>(e =>
         {
-            e.ToTable("Characters");
+            e.ToTable("zone.Characters");
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).IsRequired();
             e.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using gumonji.Common.DAL;
 
@@ -10,9 +11,11 @@ using gumonji.Common.DAL;
 namespace gumonji.Common.DAL.Migrations
 {
     [DbContext(typeof(MainContext))]
-    partial class MainContextModelSnapshot : ModelSnapshot
+    [Migration("20261004022150_ServerTablePrefixes")]
+    partial class ServerTablePrefixes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -168,30 +171,6 @@ namespace gumonji.Common.DAL.Migrations
                     b.Property<int?>("ColorType")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Comment0")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment1")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment2")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment3")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment4")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment5")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment6")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment7")
-                        .HasColumnType("TEXT");
-
                     b.Property<byte[]>("CreateId")
                         .HasColumnType("BLOB");
 
@@ -229,6 +208,26 @@ namespace gumonji.Common.DAL.Migrations
                     b.HasKey("UserId", "Slot");
 
                     b.ToTable("backd.CharacterItems", (string)null);
+                });
+
+            modelBuilder.Entity("gumonji.Common.DAL.Entities.BackdCharacterItemComment", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Index")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Text")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("UserId", "Slot", "Index");
+
+                    b.ToTable("backd.CharacterItemComments", (string)null);
                 });
 
             modelBuilder.Entity("gumonji.Common.DAL.Entities.BackdCharacterItemParameter", b =>
@@ -522,6 +521,15 @@ namespace gumonji.Common.DAL.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("gumonji.Common.DAL.Entities.BackdCharacterItemComment", b =>
+                {
+                    b.HasOne("gumonji.Common.DAL.Entities.BackdCharacterItem", null)
+                        .WithMany("Comments")
+                        .HasForeignKey("UserId", "Slot")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("gumonji.Common.DAL.Entities.BackdCharacterItemParameter", b =>
                 {
                     b.HasOne("gumonji.Common.DAL.Entities.BackdCharacterItem", null)
@@ -603,6 +611,8 @@ namespace gumonji.Common.DAL.Migrations
 
             modelBuilder.Entity("gumonji.Common.DAL.Entities.BackdCharacterItem", b =>
                 {
+                    b.Navigation("Comments");
+
                     b.Navigation("Parameters");
                 });
 

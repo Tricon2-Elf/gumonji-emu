@@ -38,7 +38,7 @@ public sealed class BackdCharacterRepository(IDbContextFactory<MainContext> fact
         var result = await db.BackdCharacters.AsNoTracking()
             .Include(x => x.Parameters).Include(x => x.Equipment).Include(x => x.Experiences)
             .Include(x => x.Extensions).Include(x => x.Items).ThenInclude(x => x.Parameters)
-            .Include(x => x.Items).ThenInclude(x => x.Comments).AsSplitQuery()
+            .AsSplitQuery()
             .SingleOrDefaultAsync(x => x.UserId == userId, ct);
         await transaction.CommitAsync(ct);
         return result;

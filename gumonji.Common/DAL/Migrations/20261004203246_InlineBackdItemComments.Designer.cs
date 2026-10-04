@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using gumonji.Common.DAL;
 
@@ -10,9 +11,11 @@ using gumonji.Common.DAL;
 namespace gumonji.Common.DAL.Migrations
 {
     [DbContext(typeof(MainContext))]
-    partial class MainContextModelSnapshot : ModelSnapshot
+    [Migration("20261004203246_InlineBackdItemComments")]
+    partial class InlineBackdItemComments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -168,29 +171,29 @@ namespace gumonji.Common.DAL.Migrations
                     b.Property<int?>("ColorType")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Comment0")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment0")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Comment1")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment1")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Comment2")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment2")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Comment3")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment3")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Comment4")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment4")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Comment5")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment5")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Comment6")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment6")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Comment7")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Comment7")
+                        .HasColumnType("BLOB");
 
                     b.Property<byte[]>("CreateId")
                         .HasColumnType("BLOB");

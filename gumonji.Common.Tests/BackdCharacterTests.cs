@@ -50,7 +50,7 @@ public sealed class BackdCharacterTests
         =item 47 iparam 7 2147483647
         =item 47 secret_iparam 7 -7
         =item 47 comment 0 EMPTY_COMMENT
-        =item 47 comment 7 one two\n\r\Z\"\'\\LEGACY_82@
+        =item 47 comment 7 one two\n\r\Z\"\'\\COMMENT_UTF8
         =item 47 create_id unique-id
         =item 47 sticker_by_uidnum 4294967295
         =item 47 family_name two wordsLEGACY_83@
@@ -73,7 +73,7 @@ public sealed class BackdCharacterTests
         """.Replace("\r\n", "\n")
         .Replace("EMPTY_COMMENT", "")
         .Replace("LEGACY_81", "\u0081")
-        .Replace("LEGACY_82", "\u0082")
+        .Replace("COMMENT_UTF8", Encoding.Latin1.GetString(Encoding.UTF8.GetBytes("日本語")))
         .Replace("LEGACY_83", "\u0083")
         .Replace("LEGACY_84", "\u0084"));
 
@@ -91,7 +91,7 @@ public sealed class BackdCharacterTests
         var item = Assert.Single(character.Items);
         Assert.Equal((47, "ship", 1, 2), (item.Slot, item.TypeName, item.Subtype, item.ColorType));
         Assert.Equal(uint.MaxValue, item.Fertilizer);
-        Assert.Equal(Encoding.Latin1.GetBytes("one two\n\r\u001a\"'\\\u0082@"), item.Comments.Single(x => x.Index == 7).Text);
+        Assert.Equal("one two\n\r\u001a\"'\\日本語", item.Comment7);
         Assert.Equal(Encoding.Latin1.GetBytes("two words\u0083@"), item.FamilyName);
         Assert.Equal(255, character.Equipment.Single(x => x.Slot == 0).Value);
         Assert.Equal((4, 255, 254, 253),
@@ -160,6 +160,39 @@ public sealed class BackdCharacterTests
     }
 
     [Fact]
+    public void Utf8CommentLimitCountsEncodedBytesRatherThanCharacters()
+    {
+        var character = new BackdCharacter { UserId = 42 };
+        var item = new BackdCharacterItem { UserId = 42, Slot = 0, TypeName = "ship",
+            Comment0 = new string('日', 21), Comment1 = "", Comment7 = "line\nquote\"\\" };
+        character.Items.Add(item);
+        var reconstructed = BackdCharacterCodec.Decode(42, BackdCharacterCodec.Encode(character)).Items[0];
+        Assert.Equal(item.Comment0, reconstructed.Comment0); // 21 * 3 = 63 bytes
+        Assert.Equal("", reconstructed.Comment1);
+        Assert.Null(reconstructed.Comment2);
+        Assert.Equal(item.Comment7, reconstructed.Comment7);
+        item.Comment0 += "日";
+        Assert.Throws<InvalidDataException>(() => BackdCharacterCodec.Encode(character));
+    }
+
+    [Fact]
+    public async Task InvalidUtf8CommentBytesBecomeReplacementTextInTheDatabase()
+    {
+        using var fixture = new Database();
+        await fixture.MigrateAsync();
+        var payload = "=character info file\n=item 0 type ship\n=item 0 comment 0 "u8.ToArray().Concat(new byte[] { 255 }).ToArray();
+        var character = BackdCharacterCodec.Decode(42, payload);
+        Assert.Equal("\uFFFD", character.Items[0].Comment0);
+        var repository = new BackdCharacterRepository(fixture);
+        await repository.SaveAsync(character);
+        var restored = (await repository.GetByUserIdAsync(42))!;
+        Assert.Equal("\uFFFD", restored.Items[0].Comment0);
+        Assert.Equal("\uFFFD", BackdCharacterCodec.Decode(42, BackdCharacterCodec.Encode(restored)).Items[0].Comment0);
+        await using var db = fixture.CreateDbContext();
+        Assert.Equal(1, await Scalar(db, "SELECT count(*) FROM \"backd.CharacterItems\" WHERE typeof(Comment0)='text' AND hex(Comment0)='EFBFBD'"));
+    }
+
+    [Fact]
     public async Task StructuredRowsSurviveRestartAndReplacementRemovesOldChildren()
     {
         using var fixture = new Database();
@@ -170,10 +203,13 @@ public sealed class BackdCharacterTests
         {
             Assert.Equal(2, await db.Set<BackdCharacterParameter>().CountAsync());
             Assert.Equal(3, await db.Set<BackdCharacterItemParameter>().CountAsync());
-            Assert.Equal(2, await db.Set<BackdCharacterItemComment>().CountAsync());
+            var item = await db.Set<BackdCharacterItem>().SingleAsync();
+            Assert.Empty(item.Comment0!);
+            Assert.NotNull(item.Comment7);
+            Assert.Null(item.Comment1);
             Assert.Equal(2, await db.Set<BackdCharacterExperience>().CountAsync());
             Assert.Equal(1, await db.Set<BackdCharacterExtension>().CountAsync());
-            Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM pragma_table_info('BackdCharacters') WHERE name='Payload'"));
+            Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM pragma_table_info('backd.Characters') WHERE name='Payload'"));
         }
         repository = new BackdCharacterRepository(fixture); // fresh service/context, not an in-memory cache
         var restored = await repository.GetByUserIdAsync(42);
@@ -184,7 +220,6 @@ public sealed class BackdCharacterTests
         await repository.SaveAsync(new BackdCharacter { UserId = 42, EditLevel = 5 });
         await using var check = fixture.CreateDbContext();
         Assert.Empty(await check.Set<BackdCharacterItem>().ToListAsync());
-        Assert.Empty(await check.Set<BackdCharacterItemComment>().ToListAsync());
         Assert.Empty(await check.Set<BackdCharacterExperience>().ToListAsync());
         Assert.Null(await repository.GetByUserIdAsync(999));
     }
@@ -199,7 +234,7 @@ public sealed class BackdCharacterTests
             await db.GetService<IMigrator>().MigrateAsync("20260930092025_BackdHistories");
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO BackdCharacters(UserId, Payload, UpdatedAt) VALUES (42, {Fixture}, {updated})");
             await db.Database.MigrateAsync();
-            Assert.Equal(1, await Scalar(db, "SELECT count(*) FROM BackdCharacterLegacy"));
+            Assert.Equal(1, await Scalar(db, "SELECT count(*) FROM \"backd.CharacterLegacy\""));
         }
         var repository = new BackdCharacterRepository(fixture);
         await repository.InitializeAsync();
@@ -209,7 +244,7 @@ public sealed class BackdCharacterTests
         await repository.InitializeAsync();
         await new BackdCharacterRepository(fixture).InitializeAsync();
         await using var check = fixture.CreateDbContext();
-        Assert.Equal(0, await Scalar(check, "SELECT count(*) FROM sqlite_master WHERE name='BackdCharacterLegacy'"));
+        Assert.Equal(0, await Scalar(check, "SELECT count(*) FROM sqlite_master WHERE name='backd.CharacterLegacy'"));
         Assert.False(check.Database.HasPendingModelChanges());
     }
 
@@ -229,7 +264,7 @@ public sealed class BackdCharacterTests
         var error = await Assert.ThrowsAsync<InvalidDataException>(() => repository.InitializeAsync());
         Assert.Contains("character 2", error.Message);
         await using var check = fixture.CreateDbContext();
-        Assert.Equal(2, await Scalar(check, "SELECT count(*) FROM BackdCharacterLegacy"));
+        Assert.Equal(2, await Scalar(check, "SELECT count(*) FROM \"backd.CharacterLegacy\""));
         Assert.Empty(await check.BackdCharacters.ToListAsync());
     }
 
@@ -251,6 +286,129 @@ public sealed class BackdCharacterTests
         Assert.Contains(saved.EditLevel, new int?[] { 11, 22 });
         Assert.Equal(saved.EditLevel, Assert.Single(saved.Items).Price);
         Assert.Equal(3, saved.Items[0].Parameters.Count);
+    }
+
+    [Fact]
+    public async Task AllServerEntitiesUseLiteralDottedTableNames()
+    {
+        using var fixture = new Database();
+        await fixture.MigrateAsync();
+        await using var db = fixture.CreateDbContext();
+        var backd = db.Model.GetEntityTypes().Where(x => x.ClrType.Name.StartsWith("Backd", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(9, backd.Length);
+        Assert.All(backd, x => Assert.StartsWith("backd.", x.GetTableName()));
+        Assert.Equal("backd.Characters", db.Model.FindEntityType(typeof(BackdCharacter))!.GetTableName());
+        Assert.Equal("zone.Characters", db.Model.FindEntityType(typeof(Character))!.GetTableName());
+        Assert.Equal("zone.InventoryItems", db.Model.FindEntityType(typeof(InventoryItem))!.GetTableName());
+        Assert.Equal("zone.Plants", db.Model.FindEntityType(typeof(Plant))!.GetTableName());
+        foreach (var entity in db.Model.GetEntityTypes())
+        {
+            var table = entity.GetTableName()!;
+            Assert.Equal(1, await Scalar(db, $"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='{table}'"));
+            Assert.Null(entity.GetSchema());
+        }
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrefixMigrationPreservesRowsRelationshipsAndHandlesConsumedLegacyTable(bool stagingAlreadyRemoved)
+    {
+        using var fixture = new Database();
+        await using var db = fixture.CreateDbContext();
+        await db.GetService<IMigrator>().MigrateAsync("20261003030522_StructuredBackdCharacters");
+        if (stagingAlreadyRemoved) await db.Database.ExecuteSqlRawAsync("DROP TABLE BackdCharacterLegacy");
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO Users (Id, Username, PasswordHash) VALUES (1, X'416C696365', X'68617368');
+            INSERT INTO Characters (Id, UserId, Name, Body, Model, Style, Color, PlayedSeconds, WalkingDistance, SwimmingDistance)
+                VALUES (1, 1, X'416C696365', 1, 2, 3, 4, 100, 200, 300);
+            INSERT INTO InventoryItems (Id, CharacterId, Slot, ItemType, Subtype, Color, Fertility) VALUES (1, 1, 0, 10, 2, 3, 400);
+            UPDATE Plants SET CharacterId=1 WHERE ZoneId=1 AND Id=1000;
+            INSERT INTO BackdCharacters (UserId, OwnerUserId, Nickname, UpdatedAt) VALUES (42, 42, X'426F62', '2020-01-02 03:04:05');
+            INSERT INTO BackdCharacterItem (UserId, Slot, TypeName, Price) VALUES (42, 47, 'ship', 123);
+            INSERT INTO BackdCharacterItemParameter (UserId, Slot, Secret, "Index", Value) VALUES (42, 47, 1, 7, 456);
+            INSERT INTO BackdCharacterItemComment (UserId, Slot, "Index", Text) VALUES (42, 47, 7, X'636F6D6D656E74');
+            INSERT INTO BackdHistories (UserId, Payload, UpdatedAt) VALUES (42, X'01020304', '2020-01-02 03:04:05');
+            INSERT INTO BackdSequences (Name, NextId) VALUES ('door', 12345);
+            """);
+        await db.Database.MigrateAsync();
+        var character = await db.Characters.SingleAsync();
+        Assert.Equal((100L, 200L, 300L), (character.PlayedSeconds, character.WalkingDistance, character.SwimmingDistance));
+        Assert.Equal(400, (await db.InventoryItems.SingleAsync()).Fertility);
+        Assert.Equal(1, (await db.Plants.SingleAsync(x => x.ZoneId == 1 && x.Id == 1000)).CharacterId);
+        var original = (await db.BackdCharacters.Include(x => x.Items).ThenInclude(x => x.Parameters)
+            .SingleAsync());
+        Assert.Equal("Bob"u8.ToArray(), original.Nickname);
+        var item = Assert.Single(original.Items);
+        Assert.Equal(123, item.Price);
+        Assert.Equal(456, Assert.Single(item.Parameters).Value);
+        Assert.Equal("comment", item.Comment7);
+        Assert.Equal(12345, (await db.BackdSequences.SingleAsync()).NextId);
+        Assert.Equal(new byte[] { 1, 2, 3, 4 }, (await db.BackdHistories.SingleAsync()).Payload);
+        Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM pragma_foreign_key_check"));
+        Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM sqlite_master WHERE type='table' AND (name GLOB 'Backd*' OR name IN ('Characters', 'Plants', 'InventoryItems'))"));
+        await db.BackdCharacters.Where(x => x.UserId == 42).ExecuteDeleteAsync();
+        Assert.Empty(await db.Set<BackdCharacterItemParameter>().AsNoTracking().ToListAsync());
+        await db.Characters.Where(x => x.Id == 1).ExecuteDeleteAsync();
+        Assert.Empty(await db.InventoryItems.AsNoTracking().ToListAsync());
+        Assert.Null((await db.Plants.AsNoTracking().SingleAsync(x => x.ZoneId == 1 && x.Id == 1000)).CharacterId);
+    }
+
+    [Fact]
+    public async Task PrefixRenameCanBeReversedAndReappliedWithoutLosingRows()
+    {
+        using var fixture = new Database();
+        await fixture.MigrateAsync();
+        var repository = new BackdCharacterRepository(fixture);
+        await repository.SaveAsync(BackdCharacterCodec.Decode(42, Fixture)); // consumes staging table
+        await using var db = fixture.CreateDbContext();
+        await db.GetService<IMigrator>().MigrateAsync("20261003030522_StructuredBackdCharacters");
+        Assert.Equal(1, await Scalar(db, "SELECT count(*) FROM BackdCharacters WHERE UserId=42"));
+        Assert.Equal(1, await Scalar(db, "SELECT count(*) FROM BackdCharacterItem WHERE UserId=42 AND Slot=47"));
+        Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM pragma_foreign_key_check"));
+        await db.Database.MigrateAsync();
+        Assert.Equal(Fixture, BackdCharacterCodec.Encode((await new BackdCharacterRepository(fixture).GetByUserIdAsync(42))!));
+        Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM pragma_foreign_key_check"));
+    }
+
+    [Fact]
+    public async Task InlineCommentMigrationPreservesAllEightFieldsAndCanBeReversed()
+    {
+        using var fixture = new Database();
+        await using var db = fixture.CreateDbContext();
+        await db.GetService<IMigrator>().MigrateAsync("20261004022150_ServerTablePrefixes");
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "backd.Characters" (UserId, UpdatedAt) VALUES (42, '2020-01-02 03:04:05');
+            INSERT INTO "backd.CharacterItems" (UserId, Slot, TypeName) VALUES (42, 0, 'ship'), (42, 1, 'ship');
+            INSERT INTO "backd.CharacterItemComments" (UserId, Slot, "Index", Text) VALUES
+                (42, 0, 0, X''), (42, 0, 7, X'00FF5C');
+            """);
+        for (var i = 0; i < 8; i++)
+        {
+            var bytes = new byte[] { (byte)(128 + i) };
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"backd.CharacterItemComments\" (UserId, Slot, \"Index\", Text) VALUES (42, 1, {i}, {bytes})");
+        }
+        await db.Database.MigrateAsync();
+        var items = await db.Set<BackdCharacterItem>().AsNoTracking().OrderBy(x => x.Slot).ToListAsync();
+        Assert.Empty(items[0].Comment0!);
+        Assert.Null(items[0].Comment1);
+        Assert.Equal("\0\uFFFD\\", items[0].Comment7);
+        Assert.Equal(2, await Scalar(db, "SELECT count(*) FROM \"backd.CharacterItems\" WHERE typeof(Comment0)='text' AND typeof(Comment7)='text'"));
+        var item = items[1];
+        var comments = new[] { item.Comment0, item.Comment1, item.Comment2, item.Comment3,
+            item.Comment4, item.Comment5, item.Comment6, item.Comment7 };
+        for (var i = 0; i < comments.Length; i++) Assert.Equal("\uFFFD", comments[i]);
+        Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='backd.CharacterItemComments'"));
+        Assert.False(db.Database.HasPendingModelChanges());
+        // Restore the row-based representation, then migrate forward a second time.
+        await db.GetService<IMigrator>().MigrateAsync("20261004022150_ServerTablePrefixes");
+        Assert.Equal(10, await Scalar(db, "SELECT count(*) FROM \"backd.CharacterItemComments\""));
+        Assert.Equal(0, await Scalar(db, "SELECT length(Text) FROM \"backd.CharacterItemComments\" WHERE Slot=0 AND \"Index\"=0"));
+        Assert.Equal(3, await Scalar(db, "SELECT length(Text) FROM \"backd.CharacterItemComments\" WHERE Slot=0 AND \"Index\"=7"));
+        await db.Database.MigrateAsync();
+        Assert.Equal("\0\uFFFD\\", (await db.Set<BackdCharacterItem>().AsNoTracking().SingleAsync(x => x.Slot == 0)).Comment7);
+        Assert.Equal(0, await Scalar(db, "SELECT count(*) FROM pragma_foreign_key_check"));
     }
 
     [Fact]
@@ -299,7 +457,7 @@ public sealed class BackdCharacterTests
         var repository = new BackdCharacterRepository(fixture);
         await repository.SaveAsync(BackdCharacterCodec.Decode(42, Fixture));
         var invalid = BackdCharacterCodec.Decode(42, Fixture);
-        invalid.Items[0].Comments.Add(new() { UserId = 42, Slot = 47, Index = 0, Text = "duplicate key"u8.ToArray() });
+        invalid.Items[0].Parameters.Add(new() { UserId = 42, Slot = 47, Index = 0, Secret = false, Value = 5 });
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.SaveAsync(invalid));
         Assert.Equal(Fixture, BackdCharacterCodec.Encode((await repository.GetByUserIdAsync(42))!));
     }

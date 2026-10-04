@@ -19,5 +19,13 @@ public sealed class BackdCharacterItem
     public uint? CaCO3 { get; set; }
     public int? Price { get; set; }
     public List<BackdCharacterItemParameter> Parameters { get; set; } = [];
-    public List<BackdCharacterItemComment> Comments { get; set; } = [];
+    // Fixed eight-field layout in the original character document. Null means omitted.
+    public string? Comment0 { get; set; }
+    public string? Comment1 { get; set; }
+    public string? Comment2 { get; set; }
+    public string? Comment3 { get; set; }
+    public string? Comment4 { get; set; }
+    public string? Comment5 { get; set; }
+    public string? Comment6 { get; set; }
+    public string? Comment7 { get; set; }
 }
