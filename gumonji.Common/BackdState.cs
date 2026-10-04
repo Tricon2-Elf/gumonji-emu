@@ -8,8 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace gumonji.Common;
 
 /// <summary>Shared backend state and persistence used by packet handlers.</summary>
-public sealed class BackdState(IDbContextFactory<MainContext> dbFactory)
+public sealed class BackdState(IDbContextFactory<MainContext> dbFactory, IBackdCharacterRepository? characters = null)
 {
+    private readonly IBackdCharacterRepository _characters = characters ?? new BackdCharacterRepository(dbFactory);
     private readonly ConcurrentDictionary<uint, Guid> _locks = new();
     private readonly ConcurrentDictionary<uint, string> _onlineUsers = new();
     private readonly SemaphoreSlim _doorSequenceLock = new(1, 1);
@@ -52,22 +53,13 @@ public sealed class BackdState(IDbContextFactory<MainContext> dbFactory)
 
     public async Task SaveCharacterAsync(uint uid, byte[] payload, CancellationToken ct)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var existing = await db.BackdCharacters.FindAsync([(long)uid], ct);
-        if (existing is null)
-            db.BackdCharacters.Add(new BackdCharacter { UserId = uid, Payload = payload });
-        else
-        {
-            existing.Payload = payload;
-            existing.UpdatedAt = DateTime.UtcNow;
-        }
-        await db.SaveChangesAsync(ct);
+        var character = Backd.BackdCharacterCodec.Decode(uid, payload);
+        await _characters.SaveAsync(character, ct);
     }
 
     public async Task<BackdCharacter?> GetCharacterAsync(uint uid, CancellationToken ct)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.BackdCharacters.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == uid, ct);
+        return await _characters.GetByUserIdAsync(uid, ct);
     }
 
     public async Task SaveHistoryAsync(uint[] values, CancellationToken ct)

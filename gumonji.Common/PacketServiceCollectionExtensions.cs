@@ -9,6 +9,7 @@ public static class PacketServiceCollectionExtensions
     public static IServiceCollection AddPacketHandlers(this IServiceCollection services)
     {
         services.TryAddSingleton<BackdState>();
+        services.TryAddSingleton<DAL.Repositories.IBackdCharacterRepository, DAL.Repositories.BackdCharacterRepository>();
         foreach (var type in typeof(IPacketHandler).Assembly.GetTypes())
         {
             if (type.IsAbstract || !typeof(IPacketHandler).IsAssignableFrom(type) ||

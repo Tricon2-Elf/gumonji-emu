@@ -100,7 +100,7 @@ public sealed class BackdDispatcherTests
         Assert.Equal(unchecked((uint)-36), reply.ReadUInt32());
         Assert.Equal(42u, reply.ReadUInt32());
 
-        var blob = new byte[] { 1, 2, 3, 4, 5 };
+        var blob = "=character info file\n=owner_uid 42\n=nickname Test\n# here follows item info\n# follows experience\n\n# end of character info file"u8.ToArray();
         var save = new PacketWriter();
         save.Write(77u);
         save.Write(42u);

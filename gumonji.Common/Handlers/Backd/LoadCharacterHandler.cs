@@ -1,4 +1,5 @@
 using gumonji.Network.Packets.Backd;
+using gumonji.Common.Backd;
 using gumonji.Network;
 using Microsoft.Extensions.Logging;
 
@@ -14,6 +15,6 @@ public sealed class LoadCharacterHandler(BackdState state) : BackdHandler<LoadCh
         var character = await state.GetCharacterAsync(request.UserId, ct);
         await session.SendAsync(new LoadCharacterReply(request.MessageId, request.UserId,
             character is null ? unchecked((uint)-13) : 0u,
-            character?.Payload ?? [], request.Options), ct);
+            character is null ? [] : BackdCharacterCodec.Encode(character), request.Options), ct);
     }
 }

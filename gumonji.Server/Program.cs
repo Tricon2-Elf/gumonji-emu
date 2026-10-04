@@ -45,6 +45,7 @@ public static class Program
         await using (var db = await host.Services.GetRequiredService<IDbContextFactory<MainContext>>()
             .CreateDbContextAsync())
             await db.Database.MigrateAsync();
+        await host.Services.GetRequiredService<IBackdCharacterRepository>().InitializeAsync();
         await host.RunAsync();
     }
 

@@ -21,8 +21,24 @@ public sealed class MainContext(DbContextOptions<MainContext> options) : DbConte
         {
             e.HasKey(x => x.UserId);
             e.Property(x => x.UserId).ValueGeneratedNever();
-            e.Property(x => x.Payload).IsRequired();
+            e.HasMany(x => x.Parameters).WithOne().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Items).WithOne().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Equipment).WithOne().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Experiences).WithOne().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Extensions).WithOne().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
+        b.Entity<BackdCharacterParameter>().HasKey(x => new { x.UserId, x.Index });
+        b.Entity<BackdCharacterEquipment>().HasKey(x => new { x.UserId, x.Slot });
+        b.Entity<BackdCharacterExperience>().HasKey(x => new { x.UserId, x.Index });
+        b.Entity<BackdCharacterExtension>().HasKey(x => new { x.UserId, x.Index });
+        b.Entity<BackdCharacterItem>(e =>
+        {
+            e.HasKey(x => new { x.UserId, x.Slot });
+            e.HasMany(x => x.Parameters).WithOne().HasForeignKey(x => new { x.UserId, x.Slot }).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Comments).WithOne().HasForeignKey(x => new { x.UserId, x.Slot }).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<BackdCharacterItemParameter>().HasKey(x => new { x.UserId, x.Slot, x.Secret, x.Index });
+        b.Entity<BackdCharacterItemComment>().HasKey(x => new { x.UserId, x.Slot, x.Index });
         b.Entity<BackdSequence>(e =>
         {
             e.HasKey(x => x.Name);

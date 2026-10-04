@@ -12,7 +12,11 @@ public sealed class SaveCharacterHandler(BackdState state) : BackdHandler<SaveCh
         BackdSession session, CancellationToken ct)
     {
         var valid = request.Operation is (uint)'I' or (uint)'C' or (uint)'U';
-        if (valid) await state.SaveCharacterAsync(request.UserId, request.Payload, ct);
+        if (valid)
+        {
+            try { await state.SaveCharacterAsync(request.UserId, request.Payload, ct); }
+            catch (InvalidDataException) { valid = false; }
+        }
         await session.SendAsync(new SaveCharacterReply(request.MessageId,
             valid ? 0u : unchecked((uint)-6), request.Operation), ct);
     }
